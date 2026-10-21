@@ -97,7 +97,7 @@ If Current Goal is missing or names no spec file, stop. That is a bundle state a
 
 ### A1. Create one card per remaining feature
 
-For each feature the tracker names as not completed, in tracker order:
+For each feature the tracker names as not completed:
 
 ```text
 kanban_create(
@@ -106,16 +106,22 @@ kanban_create(
     body="Build the feature in context/feature-specs/<NN-name>.md. "
          "Update context/progress-tracker.md as needed, then implement "
          "exactly as specified. The spec's ## Check When Done is the contract.",
-    parents=[<previous card id>],   # omit on the first card
+    parents=[<id of each feature this one Depends-On>],   # omit / empty for Depends-On: none
 )
 ```
 
 Rules that make this safe:
 
 - **One feature per card, one card per feature.** Never two features on one card. A failure must stay contained to one feature.
-- **Chain them in order.** Each card's parent is the one before it. The dispatcher only promotes a card to `ready` when its parent is `done`, so the chain enforces the build order without any timer.
+- **Parents are the DAG edges, nothing else.** A card's `parents` are exactly the features its spec's `## Depends-On` names, plus any overlap edge from the planning check (`@selcy-sdd` records those at freeze time). Never chain cards in tracker order when the spec says otherwise — a worker that links "the card before it" is a worker guessing an edge, and an edge the engineer did not write is a scheduling decision stolen from them. A feature with `Depends-On: none` gets no parents and is ready from the first wave.
+- **Multiple parents, one promotion rule.** The dispatcher promotes a card to `ready` only when *all* its parents are done. That is what makes `06 Depends-On: none` parallel-safe while `04 Depends-On: 01, 02, 03` waits — the graph is the truth, not the list order.
 - **The body is a pointer, not a brief.** Do not paraphrase the spec, do not add requirements, do not scope it. The builder reads the spec; your summary can only lose information.
 - **Idempotency.** If you are not sure whether the cards already exist, `kanban_list(status="todo")` first and skip the ones already created. Re-running bootstrap must not duplicate cards.
+
+**Ask the concurrency question once, here.** Before finishing bootstrap, ask
+the engineer (see the Concurrency section for the exact panel). Default 2 if
+unanswered. Record the answer in a comment on the first card and in
+`progress-tracker.md`; reuse it for every wave.
 
 ### A2. Report and finish
 
@@ -153,6 +159,22 @@ This delegates to the real builder skill, and that is the whole point: `@selcy-i
 `@selcy-implement` also resolves the feature itself from `progress-tracker.md` or the number, reads the root `AGENTS.md` read order, runs the spec's `## Check When Done`, updates the tracker, and commits in the fixed order. The orchestrator does none of that and should not — it would only do it worse.
 
 The `--title` is what makes the session findable in the list later. A session with a generic or auto-generated title is invisible to the engineer reviewing the run, which is the only reason these sessions get kept at all.
+
+**Parallel delegation: one worktree per feature.** When this feature is part of
+a wave with siblings in flight, it does not build in the main working tree.
+Create a worktree first and point `--dir` at it:
+
+```bash
+git -C <project-dir> worktree add ../wt-<NN> -b feat/<NN> main
+opencode run --dir <project-dir>/../wt-<NN> --title "feat-<NN>-<slug>" --auto "@selcy-implement <NN>"
+```
+
+Two builders in one working tree is a conflict before it is a merge; the
+worktree is what makes parallel safe. `@selcy-implement` commits on the
+`feat/<NN>` branch; fan-in (see the Scheduling section) merges those branches
+into `main` when the wave drains. When the feature is serial (no siblings),
+the worktree is still correct and harmless — build on the branch, merge at
+fan-in, keep `main` clean until a verified wave lands.
 
 When the run starts, record the session id it prints in the card, as a comment and in metadata:
 
@@ -346,3 +368,91 @@ If the bundle itself was wrong, fix `context/`, run `@selcy-sync` to detect drif
 Any Agent Skills client on macOS, Linux, Windows. `opencode` and `git` are the required CLIs. Shell snippets are POSIX reference; on Windows run them through the agent's cross platform shell. The delegation command is the only shell call that must work exactly; substitute the equivalent non-interactive invocation for your builder if it is not opencode.
 
 The kanban half of this skill is Hermes-specific. On a client without kanban, run Phase A as a plain list and Phase B as a loop in a single long chat; the delegation and verification contract above is unchanged.
+
+## Scheduling: the dependency graph, waves, and parallel execution
+
+The feature list is a **DAG**, not a queue. Features that do not depend on each
+other can and should be built at the same time; the executor is a wave-based
+scheduler with a fan-out/fan-in shape.
+
+This section applies to **both** execution modes:
+
+- **Kanban mode (autopilot):** cards carry multiple parents; the dispatcher
+  promotes a card when *all* its parents are done. One worker per card, so a
+  wave of three ready cards becomes three concurrent workers automatically.
+- **Hybrid mode (one long chat, no board):** the orchestrator runs Phase A as
+  a plain list and Phase B as a loop in the chat, exactly as the Portability
+  rule above says. The wave logic is unchanged: at the start of each wave the
+  orchestrator lists the ready features, starts one `opencode run` per feature
+  up to the concurrency limit (below), waits for the wave to drain (or a
+  block), runs fan-in, then computes the next wave from the tracker. Hybrid is
+  not a lesser mode — it is the same contract without the dispatcher. BMKG was
+  run this way, which is why no kanban board was created even though the loop
+  itself ran.
+
+### What an edge means
+
+An edge `A → B` (B `Depends-On: A`) means **B does not start until A is
+verified and merged**. The orchestrator never adds an edge by itself: only the
+specs' `## Depends-On` sections and the overlap rule below create edges. A
+feature with `Depends-On: none` is eligible from wave 1.
+
+**Overlap makes features serial regardless of the spec.** Two features that
+name the same module, migration, or config file in their `## Named services
+and surfaces` must not run in parallel even when their specs say nothing about
+each other — the fan-in would have to merge two diffs over the same files.
+`@selcy-sdd` detects these at planning time and writes an edge or an explicit
+disjoint-files confirmation; if one slipped through, the worker detects it at
+delegation time (both features name the same module) and serializes them,
+saying why. Shared resources: database migrations, lockfiles, route files, and
+any module both specs name — always serial.
+
+### Waves
+
+A **wave** is the set of features whose dependencies are all satisfied at the
+same time (topological order grouped by "when their dependencies are met").
+Wave 1 contains every feature with `Depends-On: none`. Wave 2 contains the
+features whose dependencies are all in wave 1. And so on. The critical path
+(the longest chain) determines the minimum number of waves; everything off
+that chain is free parallelism.
+
+### Concurrency limit: 2 default, 3 if the engineer says so
+
+The concurrency limit is how many builds are allowed to be in flight at once.
+Default is **2**. The orchestrator asks once per project, at bootstrap:
+
+> Mode paralel: mau berapa build jalan bersamaan? (default 2, maksimal yang
+> pernah dipakai 3 — kebanyakan provider rate-limit di atas itu)
+> a. 2 (default, aman)
+> b. 3
+> c. Semua yang siap di gelombang ini (tidak dibatasi — risiko rate-limit
+>    ditanggung project)
+
+The engineer picks; the orchestrator records the answer in the card/tracker
+and reuses it. If the engineer does not answer, **2 is used silently** — never
+more. Setting it higher than the number of ready features in the wave changes
+nothing; it is a cap, not a target. A rate-limit failure during a parallel
+wave blocks *that card* (B4) and the others keep running; it is not a reason
+to lower the limit for the project.
+
+### Fan-out and fan-in
+
+**Fan-out** = one wave start: one `opencode run` per ready feature, each in
+its own **git worktree** (`git worktree add ../wt-<NN> -b feat/<NN> main`).
+Parallel builds never share a working directory — the overlap rule exists
+precisely because two builders in one working tree is a conflict before it is
+a merge.
+
+**Fan-in** = after a wave drains: merge each feature branch into `main`
+(`git merge --no-ff feat/<NN>`), one at a time; any conflict is a block (B4)
+with the two features named, never a silent resolve. Fan-in is the gate the
+next wave waits on: a feature is only "done for scheduling" after it is
+verified **and merged**. If a feature in the wave blocked, its dependents stay
+blocked — but the rest of the wave can still fan in and the next wave starts
+without the blocked branch.
+
+In hybrid mode the orchestrator does this directly in the chat: list ready →
+start N background `opencode run` → `process(poll)` each → merge → next wave.
+In kanban mode the worker does the same thing per card; the concurrency limit
+is enforced by the orchestrator spawning at most that many cards into `ready`
+per wave, not by the dispatcher.

@@ -27,6 +27,10 @@ flowchart LR
     G["@selcy-orchestrate<br/>drives the whole loop"] ==> B
 ```
 
+ParallelCapable: features whose specs declare `Depends-On: none` (or whose
+dependencies have all landed) run concurrently — see **Scheduling** in
+`selcy-orchestrate`.
+
 Read it as a contract: `@selcy-sdd` or `@selcy-audit` runs **once** and writes the spec bundle. `@selcy-sdd change` runs **once per deliberate change** and writes one change spec. Everything after that runs **per feature**, in its own new chat. `@selcy-debug`, `@selcy-debt`, and `@selcy-grill` run anytime, out of band. `@selcy-orchestrate` replaces the human in the per-feature loop, once, after you approve the plan.
 
 ## The skills

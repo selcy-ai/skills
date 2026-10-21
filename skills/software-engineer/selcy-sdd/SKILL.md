@@ -149,6 +149,32 @@ From the approved plan, fix the ordered feature list and numbering. **`00-projec
 
 Write the list to state.
 
+**Build the dependency graph before the list is frozen.** Every feature carries
+a `## Depends-On` section in its spec (see the minimum spec density floor), and
+those edges are the only thing the orchestrator may schedule from — it never
+infers an edge. Two checks run here, both on the actual edges the interview
+produced:
+
+1. **Acyclic.** The graph must be a DAG. A cycle (`03 → 05 → 03`) is a
+   planning error, and it surfaces here as a stop, not mid build when two
+   features are each waiting on the other. If a cycle appears, ask which edge
+   is wrong; do not silently drop one.
+2. **File/module overlap.** Two features that touch the same module, the same
+   migration, or the same config file are **serial regardless of what their
+   specs say**, because a parallel build of both would produce conflicting
+   diffs that the fan-in cannot merge cleanly. When two unconnected features
+   both name module `reports/` in `## Named services and surfaces`, say so at
+   this stage: either they become a dependency edge (one waits for the other),
+   or the engineer confirms they genuinely own disjoint files. Detecting the
+   overlap here, before the build, is cheap; discovering it at merge time is a
+   conflict the engineer has to unravel by hand.
+
+Report the graph in the confirmation panel: the waves (see
+`@selcy-orchestrate` for the wave model), the longest chain (critical path),
+and which features are parallel-safe. The engineer may rewrite any edge — the
+edges are their scheduling decisions, the skill only enforces that they are
+explicit and consistent.
+
 **Split oversized features before the list is frozen.** A feature spec that is too large is not a feature, it is several, and the cost of discovering that mid build is a confused builder, many iterations, and a build that has to be abandoned and restarted. The signal is not line count alone; it is any of:
 
 - **More than one module.** A feature that touches auth, invoices, and PDF rendering is three features that happen to be described together.
@@ -164,6 +190,7 @@ Say the split out loud in the report, with the reason. The engineer may disagree
 
 - **Named data.** The entities, fields, and the migration name, or an explicit statement that this feature adds no schema. "CRUD customer" without the fields forces the builder to invent them, and invented field names leak into every downstream feature.
 - **Named services and surfaces.** The module or file the work lives in, and the routes or pages it exposes. "Add a list page" without the path is a guess the builder makes once and every later feature depends on.
+- **A `## Depends-On` section — explicit, never inferred.** Either a list of feature numbers this feature requires to be built first (`## Depends-On: 02, 03`) or `## Depends-On: none`. Never blank, never "see above". Dependency is a scheduling decision the engineer owns: if the feature reads a table another feature creates, or renders a screen another feature routes to, the engineer says so; a spec that leaves it silent is a spec that lets the orchestrator guess, and the orchestrator must not guess. When in doubt, write the conservative dependency (`Depends-On: 02`) — serial is always safe, a wrong parallel start is not.
 - **Named permissions and boundaries.** Who can do what, and how the feature is isolated from other tenants, users, or modules. Absent this, the builder ships an open endpoint and calls it done.
 - **A `## Design Reference` section when the feature has a user-facing surface.** A UI feature with no mockup is a feature the builder will design mid build, and whatever it invents becomes the look every later feature inherits. When the project chose mockups at planning time, every spec that renders a screen carries this section naming: the screens it needs, the breakpoints (desktop 1360, mobile 390, tablet 820 only when the spec asks), and whether a ready-made component covers part of it. `@selcy-design` reads this section and turns it into frames in the project's single `.pen` file plus an exported `design/<project>-ref.html`; `@selcy-implement` reads both as the visual contract. A spec for a UI surface with no `## Design Reference` is an owed decision, not a license for the builder to freelance the design — say so at the confirmation panel rather than letting it pass silently.
 - **Honest placeholders.** When a part of the feature depends on a later feature, say so and show a placeholder that does not pretend to be the real thing. A zero that looks like a computed total is a lie the next feature has to unwind.
@@ -192,7 +219,7 @@ Read `decision-gate.md` in full, then process features in order, `00-project-set
 4. **Check the size again, on the actual content you are about to write.** The Step 2 check runs on the plan; this one runs on the spec. If the decisions you enumerated span more than one module or surface, or the `## Check When Done` list runs long, stop and split here rather than writing an oversized spec. Letter the parts and generate each as its own spec. A split now is cheaper than a split after the build has started, and it is the same rule.
 5. Read `templates/feature-spec.md` (or `templates/project-setup.md` for feature 00), write `context/feature-specs/NN-kebab-name.md`.
 6. **Every spec ends with a mandatory `## Progress Tracker` section** naming the exact `progress-tracker.md` fields to update when the feature lands. This is what makes the per chat loop work without the engineer repeating instructions.
-7. **Every spec except `00-project-setup` carries a `## Commit and Push` section** with the fixed order: `Check When Done` passes, tests green, lint and typecheck green, then commit and push. The branch comes from the Stage 5b branch strategy, **written, not asked**: trunk-based on `main` → the spec says commit to `main`; feature branches → the spec names the branch. The panel is only generated when the bundle names no branch strategy at all. This is what lets the orchestrator delegate the build to `@selcy-implement` without it blocking every feature on a question Stage 5b already answered. Never commit on a red test. `00-project-setup` carries the same section, minus the push step when Stage 5b recorded no repository URL: the project is local only, so it commits locally and never pushes.
+7. **Every spec except `00-project-setup` carries a `## Commit and Push` section** with the fixed order: `Check When Done` passes, tests green, lint and typecheck green, then commit and push. The branch comes from the Stage 5b branch strategy, **written, not asked**: trunk-based on `main` → the spec says commit to `main`; feature branches → the spec names the branch. The panel is only generated when the bundle names no branch strategy at all. This is what lets the orchestrator delegate the build to `@selcy-implement` without it blocking every feature on a question Stage 5b already answered. Never commit on a red test. `00-project-setup` carries the same section, minus the push step when Stage 5b recorded no repository URL: the project is local only, so it commits locally, tags `feat-00`, and never pushes — local-only is a first-class mode here, not a gap. When the project is local-only, every spec's `## Commit and Push` says `local-only` explicitly, so the builder never has to guess whether a push is owed.
 8. Update state: that feature's spec is `generated`.
 
 Never batch questions across features. One feature's unresolved decisions per round, so you can approve or correct one feature at a time, exactly like the chat loop it feeds.

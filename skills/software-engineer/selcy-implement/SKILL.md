@@ -166,10 +166,16 @@ Follow the spec's `## Commit and Push` section. The order is fixed:
 2. Tests pass.
 3. Lint and typecheck pass.
 4. Commit to the branch the spec names. The spec writes this, it does not ask: trunk-based on `main` → commit to `main`; feature branches → commit to the named branch. Only when the spec names no branch at all do you ask, once, as a decision panel: `main` (recommended for a solo trunk based build) or a new branch such as `feature/<name>`. Never commit silently, and never pick the branch without asking when the spec left it open.
-5. Commit with a message that names the feature.
+5. Commit with a message that names the feature, and **tag it `feat-<NN>`** — `git tag feat-<NN>` after the commit (or the spec's tag scheme when it names one). The tag is the checkpoint: a named, auditable point the feature can be rolled back to, and the marker the orchestrator's fan-in and the engineer's `git log` read. No tag means the checkpoint does not exist, even when the commit does.
 6. Push. Never force push.
 
-If the project is local only (no repository URL in state), step 6 is skipped: commit locally and stop.
+**Local-only is a first-class mode, not a fallback.** When the project has no
+repository URL in state, or the spec's `## Commit and Push` says `local-only`,
+stop after the commit and the tag: the local commit **is** the gate artifact —
+the feature's checkpoint is proven by the committed state and the tag, and
+nothing is missing because no push happened. Do not treat "not pushed" as
+incomplete, and never invent a remote to push to. A spec that wants a push
+names the remote; a spec that does not is local-only.
 
 ### Step 7: Handoff
 
