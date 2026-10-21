@@ -70,6 +70,22 @@ Write the tests next to the code, following the project's existing test layout. 
 
 Run the suite, or hand back the exact commands. If it runs and anything is red, that is a finding for `@selcy-implement`, not a thing to fix here: this skill writes tests, it does not fix the code they cover. If the red is in code this feature did not touch, it is pre-existing: record it with `@selcy-debt` and keep this feature's suite honest about what it proved.
 
+## E2E isolation: two leaks that look like flaky tests
+
+Both produce the signature **"test passes when its file runs alone, fails in the full suite"**, and both have nothing to do with the code under test. Check them before believing a test is flaky. Depth and recipes: `references/e2e-stub-backend.md`.
+
+### The build env leak
+
+A test that stubs a backend by intercepting a *fictitious* domain (`page.route('https://stub-project.supabase.co/**')`) only works if the built app actually points at that domain. Vite bakes `.env.local` into the production bundle at build time — and `.env.local` is where the developer's real backend URL lives. Once the real URL is in `dist`, the app calls it instead of the stub domain, the route handler never fires, and the test hits a real, usually empty backend.
+
+**Rule: a build made for E2E must not inherit the developer's `.env.local`.** Bake the stub/empty env at build time (pass the env vars explicitly to the build command, or build from a clean env). Runtime overrides (`window.__SMH_ENV__`) cannot save you here — the app's real backend URL is already baked in, so there is no runtime override for "the app is talking to the wrong host".
+
+### The service worker leak
+
+A PWA service worker intercepts fetches issued by the page, and **requests handled by the SW are not interceptable by `page.route`** — Playwright routes see the page's network layer, but the SW's own outgoing request bypasses them. Any spec that stubs a backend through `page.route` will silently leak the stub request to the real network (typically failing on DNS for the fictitious domain) whenever the SW is registered and active in that context.
+
+**Rule: any spec that stubs a backend or CDN via `page.route` must disable the SW for that spec with `test.use({ serviceWorkers: 'block' })`.** PWA behavior itself is tested separately in the specs that actually exercise offline caching. This is not a workaround — the SW precache is the correct production behavior; the *test* is what has to opt out.
+
 ## What this skill never does
 
 - Never fixes application code. A red test is a report, not a repair.

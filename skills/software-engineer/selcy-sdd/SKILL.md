@@ -14,15 +14,27 @@ It exists because `/scope` and `/architect` are deliberately one decision at a t
 
 It is the greenfield door. On a codebase that already exists, the door is `@selcy-audit`, which reads the code and writes the same bundle from it. On a decision that is still open later in the project, the interview is available on its own as `@selcy-grill`. On a deliberate change to a project that already has a bundle, the door is `change` mode, below.
 
+## The design question the interview must ask
+
+A product with a user-facing surface has a **build order** question that only the engineer can settle: does the project design its screens in pen.dev before building them, or does it build directly from the spec's written description?
+
+Ask it once, at the stage that covers the product's surfaces, as a panel:
+
+- **Design first (recommended when the product has more than one or two distinct screens, or when the engineer wants mockups to review before code is written).** Every feature spec that renders a screen then carries a `## Design Reference` section, `@selcy-design` runs per feature before `@selcy-implement`, and one `.pen` file accumulates the whole product's frames. The cost is one extra step per UI feature; the payoff is that the engineer sees and approves the screen before code exists, and the builder builds to a seen design instead of an imagined one.
+- **Build directly (recommended when the product is API-only, or has a single utility screen the spec already pins down completely).** Specs carry no `## Design Reference`; `@selcy-design` is never invoked.
+
+Record the answer in state. It decides whether feature specs carry a `## Design Reference` (see the minimum spec density floor below), not whether the loop works — both modes are first class. Never answer this for the engineer; a design-first loop imposed silently is extra work per feature the engineer never asked for, and a build-direct loop imposed on a visual product is exactly how "desain bagus tapi implementasinya tidak sesuai" happens.
+
 ## The loop it hands off to
 
 This is the workflow the generated files are shaped for. Read it as the contract the output must serve:
 
 1. New chat. Run `@selcy-implement <feature>` (or just ask: read `context/feature-specs/NN-name.md` and build it).
 2. The builder reads `AGENTS.md` at the project root, which sends it to the context files in order, then the one feature spec.
-3. It builds. Nothing else in the bundle is in scope for that chat.
-4. It updates `context/progress-tracker.md` (completed, in progress, next up, open questions, session notes).
-5. You close the chat. Open a new one. Next feature spec. Same pattern.
+3. **When the spec carries a `## Design Reference`, `@selcy-design` runs first, in its own chat, before the builder.** It appends the feature's screens to the project's single `.pen` file, exports `-ref.html` + PNG, and writes `design/NN-*.md`. The builder then reads both the spec and the design note.
+4. It builds. Nothing else in the bundle is in scope for that chat.
+5. It updates `context/progress-tracker.md` (completed, in progress, next up, open questions, session notes).
+6. You close the chat. Open a new one. Next feature spec. Same pattern.
 
 Two rules make that loop safe across chats:
 - **One feature spec per chat.** Never two. That is what keeps a mistake in one chat from touching the others, and what makes each chat cheap to throw away and redo.
@@ -153,6 +165,7 @@ Say the split out loud in the report, with the reason. The engineer may disagree
 - **Named data.** The entities, fields, and the migration name, or an explicit statement that this feature adds no schema. "CRUD customer" without the fields forces the builder to invent them, and invented field names leak into every downstream feature.
 - **Named services and surfaces.** The module or file the work lives in, and the routes or pages it exposes. "Add a list page" without the path is a guess the builder makes once and every later feature depends on.
 - **Named permissions and boundaries.** Who can do what, and how the feature is isolated from other tenants, users, or modules. Absent this, the builder ships an open endpoint and calls it done.
+- **A `## Design Reference` section when the feature has a user-facing surface.** A UI feature with no mockup is a feature the builder will design mid build, and whatever it invents becomes the look every later feature inherits. When the project chose mockups at planning time, every spec that renders a screen carries this section naming: the screens it needs, the breakpoints (desktop 1360, mobile 390, tablet 820 only when the spec asks), and whether a ready-made component covers part of it. `@selcy-design` reads this section and turns it into frames in the project's single `.pen` file plus an exported `design/<project>-ref.html`; `@selcy-implement` reads both as the visual contract. A spec for a UI surface with no `## Design Reference` is an owed decision, not a license for the builder to freelance the design — say so at the confirmation panel rather than letting it pass silently.
 - **Honest placeholders.** When a part of the feature depends on a later feature, say so and show a placeholder that does not pretend to be the real thing. A zero that looks like a computed total is a lie the next feature has to unwind.
 - **A `## Scope Limits` section with at least one deferred item and a one line why.** A spec that cannot name anything it is not doing has not been scoped; it is a wish.
 - **A `## Check When Done` where every item is verifiable by running something**, not by reading the code. "Build passes" is verifiable. "The code is clean" is not. If an item cannot be phrased as an action with a pass or fail result, it is not a check.

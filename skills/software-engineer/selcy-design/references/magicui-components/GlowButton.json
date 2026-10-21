@@ -1,0 +1,38 @@
+{
+    "name": "GlowButton",
+    "type": "button",
+    "description": "A button with a glowing effect on hover.",
+    "installation": {
+        "pnpm": "pnpm dlx shadcn@latest add \"https://magicui.design/r/glow-button\"",
+        "npm": "npx shadcn@latest add \"https://magicui.design/r/glow-button\"",
+        "yarn": "npx shadcn@latest add \"https://magicui.design/r/glow-button\"",
+        "bun": "bun x --bun shadcn@latest add \"https://magicui.design/r/glow-button\""
+    },
+    "props": [
+        {
+            "name": "glowColor",
+            "type": "string",
+            "default": "#ffffff",
+            "description": "The color of the glow effect"
+        },
+        {
+            "name": "glowSize",
+            "type": "string",
+            "default": "20px",
+            "description": "The size of the glow effect"
+        },
+        {
+            "name": "className",
+            "type": "string",
+            "default": "undefined",
+            "description": "The class name of the button"
+        },
+        {
+            "name": "children",
+            "type": "React.ReactNode",
+            "default": "undefined",
+            "description": "The children of the button"
+        }
+    ],
+    "usage": "import { GlowButton } from \"@/registry/magicui/glow-button\";\n\nexport function GlowButtonDemo() {\n  return (\n    <GlowButton className=\"shadow-lg\">\n      <span className=\"text-center text-sm font-medium\">\n        Glow Button\n      </span>\n    </GlowButton>\n  );\n}"
+}

@@ -10,17 +10,18 @@ The loop has three doors. `@selcy-sdd` is the greenfield one: empty directory, y
 
 ```mermaid
 flowchart LR
-    A["@selcy-sdd<br/>once at start"] --> B["@selcy-implement<br/>one feature"]
-    H["@selcy-audit<br/>once on existing code"] --> B
-    K["@selcy-sdd change<br/>one deliberate change"] --> B
-    B --> C["@selcy-check<br/>before close"]
-    B --> D["@selcy-test<br/>after build"]
-    C --> E["@selcy-sync<br/>after edit or land"]
-    D --> E
-    E --> B
+    A["@selcy-sdd<br/>once at start"] --> B["@selcy-design<br/>one feature UI"]
+    B --> C["@selcy-implement<br/>one feature"]
+    H["@selcy-audit<br/>once on existing code"] --> C
+    K["@selcy-sdd change<br/>one deliberate change"] --> C
+    C --> D["@selcy-check<br/>before close"]
+    C --> E["@selcy-test<br/>after build"]
+    D --> F["@selcy-sync<br/>after edit or land"]
+    E --> F
+    F --> B
 
-    F["@selcy-debug<br/>anytime it breaks"] -.-> B
-    I["@selcy-debt<br/>record what outlives the chat"] -.-> B
+    F2["@selcy-debug<br/>anytime it breaks"] -.-> C
+    I["@selcy-debt<br/>record what outlives the chat"] -.-> C
     J["@selcy-grill<br/>settle one decision"] -.-> B
 
     G["@selcy-orchestrate<br/>drives the whole loop"] ==> B
@@ -34,9 +35,10 @@ One skill per phase. Run only the ones a change needs.
 
 | Skill | Category | What it does |
 | --- | --- | --- |
-| `selcy-sdd` | software-engineer | Run `@selcy-sdd` once at project start. Interviews you in structured rounds (product, stack, architecture shape, security, error handling, testing, deployment), then batch generates the whole spec-driven development context bundle plus numbered feature specs. Safe to resume in a new chat. `@selcy-sdd change` is the modification door: interviews a deliberate change, computes its blast radius, and writes one change spec. |
+| `selcy-sdd` | software-engineer | Run `@selcy-sdd` once at project start. Interviews you in structured rounds (product, stack, architecture shape, security, error handling, testing, deployment, **design first vs build directly**), then batch generates the whole spec-driven development context bundle plus numbered feature specs. Safe to resume in a new chat. `@selcy-sdd change` is the modification door: interviews a deliberate change, computes its blast radius, and writes one change spec. |
 | `selcy-audit` | software-engineer | Run `@selcy-audit` once on a codebase that already exists and has no context bundle. Reads the real code and reverse-engineers the same bundle from it, so the rest of the loop works on a project you did not start from scratch. Observes, never invents. |
-| `selcy-implement` | software-engineer | Run `@selcy-implement` to build one feature spec into working code. Reads the context bundle, gates on input coverage so nothing load bearing is invented mid build, builds, runs the spec's Check When Done, updates progress-tracker.md, and commits. One feature per chat. |
+| `selcy-design` | software-engineer | Run `@selcy-design` before `@selcy-implement` for any feature whose spec carries a `## Design Reference`. Appends the feature's screens as frames in the project's single `.pen` file (never one file per page), resolves cross-frame inconsistencies before they reach the builder, exports `html-tailwind` or `html-css` plus PNG, and writes `design/NN-name.md` naming frame ids and tokens. Applies the anti-slop and ui-ux-pro-max quality bars; opens the inspiration shelf when a design decision is stuck. Pair worker with `@selcy-implement` for UI. |
+| `selcy-implement` | software-engineer | Run `@selcy-implement` to build one feature spec into working code. Reads the context bundle, gates on input coverage so nothing load bearing is invented mid build, builds (treating a `## Design Reference` and its exported `-ref.html` as the visual contract: token and structure, never code to copy), runs the spec's Check When Done, updates progress-tracker.md, and commits. One feature per chat. |
 | `selcy-check` | software-engineer | Run `@selcy-check` before closing a feature. `verify` runs the real app and proves the feature behaves per its spec; `review` reads the diff on a fresh model and ranks findings. Read only, never edits code. |
 | `selcy-test` | software-engineer | Run `@selcy-test` after `@selcy-implement` builds a feature. Scopes from git uncommitted changes, reads the testing standards to know what must be covered first, and picks the right strategy per file. Saves the framework choice so it never asks twice. |
 | `selcy-debug` | software-engineer | Run `@selcy-debug` when something is broken. Reproduces the bug on demand, narrows it to the smallest failing surface, fixes the root cause with the smallest change, and hands a regression test to `@selcy-test`. |
