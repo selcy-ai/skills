@@ -70,7 +70,7 @@ The suite has ten skills and this orchestrator has exactly three relationships t
 | `@selcy-sdd change` | **Never runs it. Names it.** | A deliberate change to a bundle that exists. The change spec it writes is worked like any feature. |
 | `@selcy-implement` | **Delegates to it.** The build session runs `@selcy-implement <NN>`, which resolves the feature, runs the input coverage gate, builds, runs Check When Done, updates the tracker, and commits. |
 | `@selcy-check` | **Delegates to it.** | The review stage runs `@selcy-check review`; `verify` is delegated when the desk check leaves an item unproven. |
-| `@selcy-test` | **Does not delegate to it.** | See B3b. It scopes from uncommitted changes, but the builder already committed — and the point of the test stage is an independent suite written from the spec, not from the builder's reasoning. |
+|| `@selcy-test` | **Delegates to it.** | The test stage runs `@selcy-test <NN>` in its own session. It used to be the one exception — it scoped from uncommitted changes, but the builder already committed — so the skill now scopes from the feature's tag/committed range when the tree is clean (see B3b). |
 | `@selcy-debug` | **Never runs it. Names it.** | When a failure is a bug rather than an owed decision, the engineer's fix tool is this, in the build session. |
 | `@selcy-grill` | **Never runs it. Names it.** | When the block is an owed decision, this is how the engineer settles it properly instead of answering under pressure. |
 | `@selcy-debt` | **Never runs it. Names it.** | When the builder surfaced a pre-existing bug in a surface this feature did not build. |
@@ -234,19 +234,38 @@ The reviewer **never edits code**. It reads the spec, reads the code on disk, an
 
 Record the review session id in the card the same way as the build session.
 
-#### B3b. Test — new session, different model
+#### B3b. Test — new session, different model, running `@selcy-test`
 
-Create a session named `feat-<NN>-<slug>-test`, on the model the engineer named for test. The tester reads the spec and the code and writes the suite from scratch. It does not read the builder's session, because a test suite written from the builder's reasoning covers the cases the builder already considered.
+Create a session named `feat-<NN>-<slug>-test`, on the model the engineer named for test. The tester reads the spec and the code and writes the suite.
 
 ```bash
-opencode run --dir <project-dir> --title "feat-<NN>-<slug>-test" --model <test-model> --auto "Read context/feature-specs/<NN-name>.md and context/testing-standards.md, then write the test suite this feature requires. Run it and report the result."
+opencode run --dir <project-dir> --title "feat-<NN>-<slug>-test" --model <test-model> --auto "Run @selcy-test <NN>. The feature spec is context/feature-specs/<NN-name>.md."
 ```
 
-**This is deliberately not `@selcy-test`, and the reason is a real conflict, not an oversight.** `@selcy-test` scopes from uncommitted changes — `git diff` plus untracked files — and by this point the builder has already committed, because the spec's `## Commit and Push` made it, and green tests were its gate. So the working tree is clean and `@selcy-test` would correctly report nothing to test and stop.
+**This is a real delegation now, and the reason it used not to be is fixed.**
+`@selcy-test` used to scope from uncommitted changes only — `git diff` plus
+untracked files — and by this point the builder has already committed, so the
+working tree was clean and `@selcy-test` would correctly report nothing to
+test and stop. The old answer was to hand-roll the test stage instead: a
+prompt the orchestrator invented, telling the tester to "write the suite from
+the spec alone." That was wrong twice over — it dropped `@selcy-test`'s own
+classification and strategy discipline, and it let the orchestrator write a
+prompt the skill already owns.
 
-The test stage wants something different anyway: a suite written **from the spec alone**, by a session that never saw the builder's reasoning. That is the whole point of a separate session — the builder already wrote its own tests (the spec forced it to, before the commit), and a suite written from the builder's thinking covers the cases the builder already considered. So this session reads the spec and `testing-standards.md` and writes the independent suite.
+`@selcy-test` now scopes from the **feature's committed range** when the
+working tree is clean: the feature's tag (`feat-<NN>` / `cp<NN>`) first, then
+the previous tag to HEAD, then the commits since the feature went In
+Progress. That fallback exists precisely because the builder commits in this
+loop — the tag-based window is the correct scope, and "no uncommitted
+changes" is no longer a stop.
 
-The one thing borrowed from `@selcy-test` is its discipline, not its command: trace each test to a `## Check When Done` item or a standards requirement, and refuse to write tests that lock in scaffolding the feature never made real. A test with no traceable source is scope creep or a spec gap; say which.
+The independence the test stage needs is preserved by the session, not by
+the prompt: the tester is a separate `opencode run` on a different model, so
+it never saw the builder's reasoning either way. It reads the spec and
+`testing-standards.md`, and `@selcy-test` Step 4 still traces each test to a
+`## Check When Done` item or a standards requirement — that discipline is
+the skill's, not something the orchestrator re-derives per feature.
+
 The tester writes tests and runs them. It does not fix the implementation when they go red — that goes back to the builder, in the build session, via B4.
 
 #### B3c. Read all three results
@@ -319,7 +338,7 @@ If the failure came from review or test, name those sessions in the block reason
 - Never batches features. One per card, one per delegation, always.
 - Never retries a failed delegation automatically. A retry without new information is the same failure again. The card stays blocked until a human unblocks it.
 - Never marks a feature complete itself. It reads the tracker; the builder writes it. `kanban_complete` is called only when the tracker says every feature is done.
-- Never runs any of the ten skills in its own session. The two it delegates to — `@selcy-implement` and `@selcy-check` — run inside the delegated `opencode run` sessions, on the models it chose; `@selcy-test` is the documented exception (B3b), and the other seven it never runs at all, it names them to the engineer. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
+- Never runs any of the ten skills in its own session. The three it delegates to — `@selcy-implement`, `@selcy-check`, and `@selcy-test` — run inside the delegated `opencode run` sessions, on the models it chose; the other seven it never runs at all, it names them to the engineer. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
 - Never creates a second build session for a feature that already has one. An interrupted build is resumed, not restarted. `feat-04` and `feat-04-r1` running side by side is this rule failing.
 - Never lets the reviewer or the tester edit implementation code. They report; the build session fixes.
 - Never deletes a session the engineer may need. Probe and smoke sessions are the engineer's signal that something ran; deleting them silently is why the engineer stops trusting the session list. Name them in the report instead.
@@ -389,6 +408,25 @@ This section applies to **both** execution modes:
   not a lesser mode — it is the same contract without the dispatcher. BMKG was
   run this way, which is why no kanban board was created even though the loop
   itself ran.
+
+**The mode changes where the loop runs, never what the delegation says.**
+This is the rule BMKG broke. In hybrid mode it is tempting to write the build
+prompt yourself — a long paraphrase of the spec, a checklist, some advice —
+and hand that to `opencode run` instead of the skill command. That is
+forbidden in **both** modes. The delegation is always
+`opencode run --auto "@selcy-implement <NN>"` and nothing more, because the
+value is in what the skill does that a hand prompt cannot: `@selcy-implement`
+runs the **input coverage gate** — it enumerates every value the build must
+produce and stops on any value with no named source in the bundle — which a
+prompt the orchestrator invented has no equivalent for. A hand prompt in
+hybrid mode is a worker quietly removing the gate that makes unattended
+builds safe. The same holds for the review and test stages: they run in
+**separate `opencode run` sessions that carry the skill command**
+(`@selcy-check review`, and the test stage below), not as something the
+orchestrator improvises inline in its own chat. The orchestrator's own
+session never hosts the review; a review that lives in the orchestrator's
+chat is a review that inherits the orchestrator's blind spots instead of the
+builder's — same failure, different session.
 
 ### What an edge means
 

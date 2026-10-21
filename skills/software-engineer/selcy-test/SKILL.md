@@ -45,6 +45,30 @@ git ls-files --others --exclude-standard
 
 Empty → nothing to test. Say so and stop; do not ask a scope question when the working tree already answered it.
 
+**Working tree clean?** Then the feature's work has already been committed —
+and in the selcy loop that is the *normal* case, not an edge case.
+`@selcy-implement` commits when it finishes (its `## Commit and Push` step),
+so by the time a test stage runs there is nothing uncommitted, and the
+commands above correctly report nothing. **That is not "nothing to test"; it
+is the wrong scope window.** Fall back to the feature's committed range, in
+this order:
+
+1. The feature's tag: `git diff --name-only --diff-filter=ACMR
+   feat-<NN>^..feat-<NN>` (or `cp<NN>` / whatever tag scheme the project
+   used). This is why the builder tags every feature — the tag names the
+   checkpoint, and the diff across it is the feature. When the tag exists,
+   use it and stop here.
+2. No tag → the range from the previous feature's tag to HEAD.
+3. No tag at all → the commits since the feature went In Progress, per
+   `context/progress-tracker.md`.
+
+When you fall back, **say which window you used and why** in the report, so
+the engineer can see the suite was scoped from the committed range and not
+from a silently widened net. This fallback exists because a tester that
+stops at "no uncommitted changes" is a tester that never runs in a loop
+where the builder commits — and a test stage that never runs is a feature
+that ships on the builder's word alone.
+
 More than 15 files → ask whether to scope to the feature's own area (recommended) or take the whole set.
 
 ### Step 3: Classify and pick a strategy per file
