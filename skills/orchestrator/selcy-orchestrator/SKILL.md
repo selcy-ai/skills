@@ -75,8 +75,9 @@ The suite has ten skills and this orchestrator has exactly three relationships t
 | `@selcy-grill` | **Never runs it. Names it.** | When the block is an owed decision, this is how the engineer settles it properly instead of answering under pressure. |
 | `@selcy-debt` | **Never runs it. Names it.** | When the builder surfaced a pre-existing bug in a surface this feature did not build. |
 | `@selcy-sync` | **Never runs it. Names it.** | After the engineer edits a standards file, and after a change lands, to catch the specs it made stale. |
+| `@selcy-deploy` | **Never runs it. Names it.** | Deploy/handoff time. It runs preflight checks and writes the runbook; the orchestrator names it when the tracker says every feature is done and a deploy or handoff is next. |
 
-**The rule behind the table:** the orchestrator delegates the two skills that do work inside a build (implement, check) and only names the seven that decide, record, or maintain contracts. `@selcy-test` is the one exception, and it is a deliberate one — see B3b. A worker that runs `@selcy-grill` itself is a worker answering an owed decision on the engineer's behalf, which the never-does list forbids; a worker that hand-rolls `@selcy-check review` is a worker that drops the severity ranking and the standards-file-is-contract rule that make the review worth spawning.
+**The rule behind the table:** the orchestrator delegates the three skills that do work inside a build (implement, check, test) and only names the eight that decide, record, or maintain contracts. A worker that runs `@selcy-grill` itself is a worker answering an owed decision on the engineer's behalf, which the never-does list forbids; a worker that hand-rolls `@selcy-check review` is a worker that drops the severity ranking and the standards-file-is-contract rule that make the review worth spawning.
 
 ## Phase A: Bootstrap the board
 
@@ -332,7 +333,7 @@ If the failure came from review or test, name those sessions in the block reason
 
 ## What this skill never does
 
-- Never writes application code. It delegates; it does not build.
+- Never writes application code as a shortcut around the loop. It delegates; it does not build. **The one exception is a small infra fix** — a test spec, a verify script, a docs correction, a one-line config repair — where the work is genuinely small and doing it through a full build delegation costs more than it returns. When the orchestrator uses that exception it must say so in the chat it is running in: what it edited, and why it did not delegate. The report is not a request for permission and must not stop the turn waiting for confirmation; it is an audit trail, after the fact, so the engineer is never surprised by a diff whose origin they cannot see. Anything beyond genuinely small — a real feature change, a multi-file implementation, anything that would take a builder more than a few minutes — goes back to `@selcy-implement` like everything else. When unsure whether a fix is small, treat it as not small and delegate. Application source that ships to users is never in this exception; only the scaffolding around the build.
 - Never edits a file under `context/`. Those are contracts. A wrong spec is a human decision.
 - Never answers an owed decision. It surfaces the question and blocks.
 - Never batches features. One per card, one per delegation, always.

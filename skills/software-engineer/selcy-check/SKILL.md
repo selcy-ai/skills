@@ -56,6 +56,26 @@ Read only. Never fix, never edit, never commit. A failure points at `@selcy-debu
 
 A finding that reveals a real standards violation goes to `@selcy-implement` to fix. A finding that reveals the standards file itself is wrong is an owed decision: report it, do not edit the standards file here.
 
+**A grep is not a finding.** When you check code by pattern — `grep`, `rg`, a custom
+regex — the match is a *candidate*, never a verdict. Bare greps produce the classic
+false positive: a gate looking for `device_hash|hidden_reason` fires four times, all
+four in a documentation comment explaining *why* those fields are excluded — the gate
+calls it a violation, the engineer loses an hour. Two rules:
+
+1. **Strip comments before matching.** Run the source through a comment stripper
+   (or match with a parser-aware tool) so documentation cannot trigger a code rule.
+   If the stack has no stripper handy, drop the matches that fall inside comment
+   regions — but do it mechanically (line position against lexer state), not by
+   eyeballing the match and deciding it "looks like a comment."
+2. **A match is evidence, not a conclusion.** Read the matched region before
+   reporting it. A finding whose entire basis is "the pattern matched" is a finding
+   that has not been verified; say what the code actually does in the matched region,
+   or drop the finding.
+
+The same rule applies to verify mode: any `Check When Done` item you prove with a
+pattern match must show the stripped match and the surrounding code, not the raw
+grep count.
+
 ## What this skill never does
 
 - Never edits code, in either mode.

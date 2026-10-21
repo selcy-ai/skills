@@ -76,8 +76,10 @@ Also owed, without enumerating:
 - a provider, library, or integration not already in the stack table or the env var table,
 - **A whole page or screen whose composition `ui-context.md` and the spec together do not pin down.** This is exactly what `@selcy-design` exists to settle: if the spec carries a `## Design Reference`, the mockup (and its exported `design/<project>-ref.html`) is the named source for the page's composition, and this bullet is satisfied by it.
 - **A behavior that is not trivial (search, generation, wizards, payment flows)**,
-- **A permission or ownership rule (who may read and mutate what)**,
+- **A permission or ownership rule (who may read or mutate what)**,
 - **Money or timezone handling, if the bundle never settled the rule and this feature touches it.**
+
+**Too big for one run.** A spec with more than ~12 `## Check When Done` items, or one whose tests span 3+ distinct domains (unit + community E2E + product E2E + integrations), will not fit in one build session — the builder will thrash, and the run fails late and expensively. If the spec crosses either threshold, **stop before writing code** and say so: name the threshold crossed, and route back to `/selcy-sdd specs <feature>` to split it into 2–3 specs each under the limit. This is not a refusal to build; it is the gate catching a planning problem at the cheapest moment. A spec already under the thresholds builds normally.
 
 **Design reference wins.** If the feature spec names a `## Design Reference`
 (`design/<name>.pen` or PNG at the project root, or `design/NN-*.md` +
@@ -127,9 +129,11 @@ Build inline on the main thread. Track which slices the feature needs:
 
 - **UI**: components, pages, layouts, routes.
 - **Logical**: API routes, services, data layers, business logic, integrations.
-- Most features are both.
+Most features are both.
 
 Install dependencies just in time: only what this feature's `## Implementation` names, not every library the stack table lists. Each later feature installs its own.
+
+**Write real code, then run it.** The product of this step is working files on disk plus a run that exercised them — not a plan, not a set of notes, and never an analysis followed by exit 0. A builder that writes "the approach would be…" and stops has produced documentation, and documentation cannot fail a lint or a test. Concretely: create or modify the source files, then execute something that proves them (the run command the stack uses — type check, lint, the app itself), then report the observed result. If the work is genuinely blocked, the only honest move is to say so and stop with the blocker named — never to describe what you would have done and exit cleanly. A clean exit with no code in the diff is the failure mode; the check that catches it is a non empty diff plus a real run before Step 4.
 
 Follow the standards files. They are not suggestions. In particular:
 
