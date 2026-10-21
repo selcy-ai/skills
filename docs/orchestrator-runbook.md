@@ -5,7 +5,7 @@ How to go from an empty folder to a built product, unattended, with Hermes as th
 ## What this is
 
 ```text
-you  ──@selcy-sdd──▶  context/ bundle  ──you approve──▶  @selcy-orchestrate (once)
+you  ──@selcy-sdd──▶  context/ bundle  ──you approve──▶  @selcy-orchestrator (once)
                                                             │
                                                             ▼
                                               kanban board: one card per feature
@@ -33,13 +33,13 @@ Five pieces, each with one job:
 | --- | --- | --- |
 | `selcy-orchestrator` profile | Read the card, delegate one feature, verify, close the card | `~/.hermes/profiles/selcy-orchestrator/` |
 | `SOUL.md` | The worker's rules: never build, never edit specs, never answer owed decisions | Same folder |
-| `selcy-orchestrate` skill | The two phases: bootstrap the board, then the worker loop | This repo, `skills/orchestrator@selcy-orchestrate/SKILL.md` |
+| `selcy-orchestrator` skill | The two phases: bootstrap the board, then the worker loop | This repo, `skills/orchestrator@selcy-orchestrator/SKILL.md` |
 | Kanban board | The trigger and the state. One card per feature, chained in order | `~/.hermes/kanban.db` |
 | Gateway dispatcher | The event loop. Claims a ready card every 60s and spawns the worker | Runs as a background service |
 
 The trigger is not a cron job and not a human. It is the dispatcher: a loop inside the gateway that claims any card in `ready` status and spawns the assigned profile. You create the cards once; the board does the rest.
 
-This repo also holds the spec-driven skills (`@selcy-sdd`, `@selcy-audit`, `@selcy-implement`, `@selcy-check`, `@selcy-test`, `@selcy-debug`, `@selcy-grill`, `@selcy-debt`, `@selcy-sync`) under `skills/software-engineer/`, plus `@selcy-sdd change` as the modification door. The orchestrator lives at `skills/orchestrator@selcy-orchestrate`.
+This repo also holds the spec-driven skills (`@selcy-sdd`, `@selcy-audit`, `@selcy-implement`, `@selcy-check`, `@selcy-test`, `@selcy-debug`, `@selcy-grill`, `@selcy-debt`, `@selcy-sync`) under `skills/software-engineer/`, plus `@selcy-sdd change` as the modification door. The orchestrator lives at `skills/orchestrator@selcy-orchestrator`.
 
 ## The three doors, and which one you came through
 
@@ -79,14 +79,14 @@ Where each one lands:
 | `maulanaadib/skills` | `-a opencode` | `.agents/skills/` |
 | `maulanaadib/skills` | `-a hermes-agent` | `.hermes/skills/` |
 
-Note: `npx skills add` copies every skill in the repo, so each agent receives all seven. Only the ones that agent invokes will ever load; the rest sit idle. Getting the `-a` flags backwards is still the most common install failure, and it fails silently: the file is on disk, the agent that needs it never loads it. If `opencode run` later says it does not know `@selcy-sdd`, or the Hermes worker says it has no `selcy-orchestrate` skill, check this table.
+Note: `npx skills add` copies every skill in the repo, so each agent receives all seven. Only the ones that agent invokes will ever load; the rest sit idle. Getting the `-a` flags backwards is still the most common install failure, and it fails silently: the file is on disk, the agent that needs it never loads it. If `opencode run` later says it does not know `@selcy-sdd`, or the Hermes worker says it has no `selcy-orchestrator` skill, check this table.
 
 ### 2. Install the orchestrator skill into the Hermes profile
 
 The worker needs the skill on the profile, not just in the project:
 
 ```bash
-hermes -p selcy-orchestrator skills install https://raw.githubusercontent.com/maulanaadib/skills/main/skills/orchestrator@selcy-orchestrate/SKILL.md --yes
+hermes -p selcy-orchestrator skills install https://raw.githubusercontent.com/maulanaadib/skills/main/skills/orchestrator@selcy-orchestrator/SKILL.md --yes
 ```
 
 ### 3. Enable the kanban toolset on the profile
@@ -152,7 +152,7 @@ hermes -p selcy-orchestrator chat
 Then in the chat:
 
 ```text
-@selcy-orchestrate
+@selcy-orchestrator
 ```
 
 The skill reads `context/progress-tracker.md`, creates one kanban card per remaining feature, chains them in order, and reports the card ids. Then it stops. It does not start working them — that is the dispatcher's job.
@@ -256,7 +256,7 @@ hermes gateway stop
 hermes profile delete selcy-orchestrator
 
 # Remove the skill from a project
-npx skills@latest remove selcy-orchestrate
+npx skills@latest remove selcy-orchestrator
 ```
 
 The `context/` bundle stays untouched. Removing the orchestrator never removes the specs or the code.

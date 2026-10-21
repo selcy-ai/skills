@@ -24,14 +24,14 @@ flowchart LR
     I["@selcy-debt<br/>record what outlives the chat"] -.-> C
     J["@selcy-grill<br/>settle one decision"] -.-> B
 
-    G["@selcy-orchestrate<br/>drives the whole loop"] ==> B
+    G["@selcy-orchestrator<br/>drives the whole loop"] ==> B
 ```
 
 ParallelCapable: features whose specs declare `Depends-On: none` (or whose
 dependencies have all landed) run concurrently — see **Scheduling** in
-`selcy-orchestrate`.
+`selcy-orchestrator`.
 
-Read it as a contract: `@selcy-sdd` or `@selcy-audit` runs **once** and writes the spec bundle. `@selcy-sdd change` runs **once per deliberate change** and writes one change spec. Everything after that runs **per feature**, in its own new chat. `@selcy-debug`, `@selcy-debt`, and `@selcy-grill` run anytime, out of band. `@selcy-orchestrate` replaces the human in the per-feature loop, once, after you approve the plan.
+Read it as a contract: `@selcy-sdd` or `@selcy-audit` runs **once** and writes the spec bundle. `@selcy-sdd change` runs **once per deliberate change** and writes one change spec. Everything after that runs **per feature**, in its own new chat. `@selcy-debug`, `@selcy-debt`, and `@selcy-grill` run anytime, out of band. `@selcy-orchestrator` replaces the human in the per-feature loop, once, after you approve the plan.
 
 ## The skills
 
@@ -49,7 +49,7 @@ One skill per phase. Run only the ones a change needs.
 | `selcy-grill` | software-engineer | Run `@selcy-grill` before a change whose design is still open. Interviews you across the design tree, one round at a time, until every branch is resolved, then writes the decision to the standards file that owns it. The interview primitive behind `@selcy-sdd`, usable on its own. |
 | `selcy-debt` | software-engineer | Run `@selcy-debt` when you find a bug that is not yours, or learn a gotcha the next chat needs. Records pre-existing bugs with the feature that owns them and per-module gotchas in `context/debt.md`, so the current chat stays clean and the finding has a home. Never fixes anything. |
 | `selcy-sync` | software-engineer | Run `@selcy-sync` after you edit a context file by hand, or after a feature lands. Reconciles progress-tracker.md against the repo, detects a context file that drifted from the feature specs, and flags specs the change made stale. |
-| `selcy-orchestrate` | orchestrator | Run `@selcy-orchestrate` after `@selcy-sdd` and you approve the plan. Reads progress-tracker.md, delegates one feature at a time to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review session and an independent test session, verifies against the spec's Check When Done, and advances. Unattended, stops only on an owed decision or a failed gate. |
+| `selcy-orchestrator` | orchestrator | Run `@selcy-orchestrator` after `@selcy-sdd` and you approve the plan. Reads progress-tracker.md, delegates one feature at a time to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review session and an independent test session, verifies against the spec's Check When Done, and advances. Unattended, stops only on an owed decision or a failed gate. |
 
 ---
 
@@ -86,7 +86,7 @@ npx skills@latest add maulanaadib/skills --list
 
 **One trade-off to know.** `npx skills add` copies every skill in the repo, so each agent receives all ten even if it will only use a few. The unused ones sit idle; a skill never loads unless its trigger fires. This is the cost of keeping unrelated skills in one repo instead of one repo per skill.
 
-The orchestrator has an extra step the other nine do not. It needs a Hermes profile and the kanban toolset, because the dispatcher is what spawns it. If you only want the spec-driven loop, install with `-a opencode` and never set up Hermes; `selcy-orchestrate` will not fire. Full walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
+The orchestrator has an extra step the other nine do not. It needs a Hermes profile and the kanban toolset, because the dispatcher is what spawns it. If you only want the spec-driven loop, install with `-a opencode` and never set up Hermes; `selcy-orchestrator` will not fire. Full walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
 
 ---
 
@@ -455,7 +455,7 @@ The bundle is a set of contracts. A standards file is a contract every feature s
 
 Skip step 2 only when you already know which features your edit touches. Run it when you do not. Editing `error-handling.md` touches every feature, since every server action uses the contract, so that is a case where sync is the safety net that matters.
 
-### `@selcy-orchestrate` — the unattended loop
+### `@selcy-orchestrator` — the unattended loop
 
 **Run after `@selcy-sdd` and you approve the plan.** It replaces the human in the per-feature loop.
 
@@ -565,7 +565,7 @@ You edit a context file by hand:
 You want the whole build unattended after approving the plan:
 
 ```bash
-@selcy-orchestrate
+@selcy-orchestrator
 ```
 
 ## An existing project
@@ -614,13 +614,13 @@ The `/scope` and `/architect` style of skill is deliberately one decision at a t
 
 It also closes the gaps where a builder most often hallucinates: security rules, architecture shape, the error contract, the testing contract, the data model, money and timezone handling, and the environment variable list. Each is decided once, written to a standards file, and inherited by every feature spec.
 
-The ten skills exist because each is a distinct job with a distinct contract, and mixing them is what causes the failures they prevent: a builder that reviews its own code shares its own blind spots (`selcy-check`), a test suite that proves the tests but not the spec (`selcy-check verify`), a fix that silences a symptom without explaining it (`selcy-debug`), a standards edit that silently invalidates specs nobody regenerates (`selcy-sync`), a decision settled in chat and lost by the next one (`selcy-grill`), a finding that outlives the chat that found it and gets re-tripped (`selcy-debt`), a project that already exists and cannot get through the greenfield door (`selcy-audit`), a deliberate change with no blast radius that breaks a surface nobody checked (`selcy-sdd change`), and a human bottleneck the loop does not actually need (`selcy-orchestrate`).
+The ten skills exist because each is a distinct job with a distinct contract, and mixing them is what causes the failures they prevent: a builder that reviews its own code shares its own blind spots (`selcy-check`), a test suite that proves the tests but not the spec (`selcy-check verify`), a fix that silences a symptom without explaining it (`selcy-debug`), a standards edit that silently invalidates specs nobody regenerates (`selcy-sync`), a decision settled in chat and lost by the next one (`selcy-grill`), a finding that outlives the chat that found it and gets re-tripped (`selcy-debt`), a project that already exists and cannot get through the greenfield door (`selcy-audit`), a deliberate change with no blast radius that breaks a surface nobody checked (`selcy-sdd change`), and a human bottleneck the loop does not actually need (`selcy-orchestrator`).
 
 ## Requirements
 
 Any Agent Skills client: Claude Code, OpenCode, Codex, Cursor, GitHub Copilot, Gemini CLI, Windsurf, and [75 more](https://agentskills.io/clients). No runtime, no service, no tokens. `git` is the only required CLI for the nine spec-driven skills, used by `@selcy-test`, `@selcy-check review`, and `@selcy-sync`.
 
-`@selcy-orchestrate` is the exception. It additionally requires a Hermes profile with the kanban toolset and `opencode` on PATH. See **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
+`@selcy-orchestrator` is the exception. It additionally requires a Hermes profile with the kanban toolset and `opencode` on PATH. See **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
 
 ## License
 
