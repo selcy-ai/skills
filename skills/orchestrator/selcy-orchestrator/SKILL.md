@@ -1,5 +1,5 @@
 ---
-name: selcy-orchestrate
+name: selcy-orchestrator
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Agent
 description: "Turns an approved @selcy-sdd spec bundle into a kanban board of feature cards, then works them one at a time as the dispatcher spawns it. Each card delegates one feature to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review session and an independent test session, verifies against the spec's Check When Done, and completes or blocks. Fully autonomous once the bundle is approved — the board is the trigger."
 ---
@@ -55,7 +55,7 @@ All four must be true, or the skill stops and says which one is missing:
 1. A `context/` bundle exists in the project directory — written by `@selcy-sdd`, reverse-engineered by `@selcy-audit`, or carrying a change spec from `@selcy-sdd change`. Any of the three doors works. The orchestrator reads the tracker, not the bundle's origin, and a change spec is worked exactly like a feature spec.
 2. `context/progress-tracker.md` names a current goal that is a spec file in `context/feature-specs/`.
 3. `opencode` is on PATH and can run in the project directory.
-4. The kanban toolset is enabled on this profile (`hermes -p selcy-orchestrator tools enable kanban`). Without it the `kanban_*` tools are not in the schema and the worker cannot close its own card.
+4. The kanban toolset is enabled on the profile running this skill (`hermes tools enable kanban` on the current profile). Without it the `kanban_*` tools are not in the schema and the worker cannot close its own card. **There is no separate `selcy-orchestrator` profile to create** — the profile that runs this skill is the worker. If you are running this in the `selcy` profile, `selcy` *is* the orchestrator the dispatcher spawns; `assignee="selcy-orchestrator"` in the card below names the role, and the profile running the skill fills it. A project whose profile has the kanban tools is autopilot-ready; one that does not, runs hybrid (see the Scheduling section). Both modes delegate to the same `@selcy-implement` / `@selcy-check` / `@selcy-test` commands.
 
 The skill never creates a bundle, never edits the feature list, and never runs `@selcy-sdd`, `@selcy-audit`, or `@selcy-sdd change`. If the bundle is missing, that is a human decision about what to build; tell the engineer which door applies: `@selcy-sdd` on a new project, `@selcy-audit` on a codebase that already exists, `@selcy-sdd change` on a bundle that exists and needs a deliberate edit.
 
