@@ -52,6 +52,8 @@ The Vite rule above generalizes to Next.js, and the single decision is the rende
 - **`output: 'export'` in `next.config.js`** → `next build` emits a static `out/` folder, deployable to Cloudflare Pages exactly like a Vite `dist/`. This covers dashboards and apps whose data flows through a client-side Supabase (or any API) client. No Vercel, no Node process, no PM2 — free on the Pages free tier.
 - **SSR / Server Components** → a runtime is required. Options: `@cloudflare/next-on-pages` (runs on the edge worker; no full Node API, needs `nodejs_compat`), Vercel (one click, smoothest), or a VPS with `next build && next start` behind PM2 + nginx + HTTPS. `npm run dev` is **never** a production answer for either mode — it is the dev server (HMR, source maps, no hardening, dies when the process dies).
 
+**Vercel's own deploy model, for contrast.** What Vercel does behind "one click" is the same thing the Pages commands do manually: it runs your build, takes the static output, and serves it from an edge network — plus, for SSR apps, it keeps a managed Node runtime alive to run server components. `npm run dev` on Vercel is only ever the local development command; production there is a built and served artifact, exactly like the Pages path above. Understanding this is what makes the Cloudflare alternative legible: for a static export the two host the same bytes, Cloudflare just does it free.
+
 The frontend/backend split is the same pattern this whole skill serves: static frontend on Pages, backend on Supabase, the three rules below held.
 
 ### General pattern
