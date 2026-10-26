@@ -45,6 +45,15 @@ A custom domain on a Worker must be registered through the Workers API (`workers
 
 Vite's `envDir` defaults to the app directory (e.g. `apps/web`), so a `.env.local` at the repo root is **not read**. When a build seems to be missing env vars that are definitely on disk, check `envDir` before assuming the vars are wrong.
 
+### Next.js: static export means no Vercel, no `npm run dev`
+
+The Vite rule above generalizes to Next.js, and the single decision is the render mode:
+
+- **`output: 'export'` in `next.config.js`** → `next build` emits a static `out/` folder, deployable to Cloudflare Pages exactly like a Vite `dist/`. This covers dashboards and apps whose data flows through a client-side Supabase (or any API) client. No Vercel, no Node process, no PM2 — free on the Pages free tier.
+- **SSR / Server Components** → a runtime is required. Options: `@cloudflare/next-on-pages` (runs on the edge worker; no full Node API, needs `nodejs_compat`), Vercel (one click, smoothest), or a VPS with `next build && next start` behind PM2 + nginx + HTTPS. `npm run dev` is **never** a production answer for either mode — it is the dev server (HMR, source maps, no hardening, dies when the process dies).
+
+The frontend/backend split is the same pattern this whole skill serves: static frontend on Pages, backend on Supabase, the three rules below held.
+
 ### General pattern
 
 Behind each fact above is one rule: **the environment the code runs in is part of the build, not part of the machine.** Env vars, domains, and origins are configuration that must be stated at build/deploy time. Anything left implicit will, on the next deploy or the next developer's machine, be wrong.
