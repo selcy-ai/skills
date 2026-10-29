@@ -1,13 +1,13 @@
 ---
 name: selcy-design
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, AskUserQuestion
-description: "Run @selcy-design before @selcy-implement for any feature whose spec carries a ## Design Reference. Appends the feature's screens as frames in the project's single .pen file (never one file per page), resolves cross-frame inconsistencies before they reach the builder, exports html-tailwind or html-css plus PNG, and writes design/NN-name.md naming frame ids and tokens. Pair worker with @selcy-implement for UI."
+description: "Run /selcy-design before /selcy-implement for any feature whose spec carries a ## Design Reference. Appends the feature's screens as frames in the project's single .pen file (never one file per page), resolves cross-frame inconsistencies before they reach the builder, exports html-tailwind or html-css plus PNG, and writes design/NN-name.md naming frame ids and tokens. Pair worker with /selcy-implement for UI."
 ---
 
 # selcy-design — design worker for the SELCy loop
 
-The design half of a feature. `@selcy-sdd` writes the spec; this skill
-makes the mockup the spec references; `@selcy-implement` builds from both.
+The design half of a feature. `/selcy-sdd` writes the spec; this skill
+makes the mockup the spec references; `/selcy-implement` builds from both.
 Design happens **per feature, inside the loop** — never all screens upfront,
 because a mockup built before any build feedback goes stale the moment a
 later feature changes the data model.
@@ -17,7 +17,7 @@ later feature changes the data model.
 Only when the feature spec carries a `## Design Reference` section. If it
 does not, the feature needs no mockup and this skill is not invoked. The
 orchestrator decides: it reads the spec, sees the section, and delegates
-`@selcy-design NN` before `@selcy-implement NN`.
+`/selcy-design NN` before `/selcy-implement NN`.
 
 One feature per run, same rule as the builder. Never design two features in
 one chat — a mistake in one must not reach the other.
@@ -189,7 +189,7 @@ Setiap run menulis satu file note, minimal berisi:
 - **Frame index**: frame id + nama + breakpoint yang dibuat run ini
 - **Token yang dipakai**: warna (hex), font, radius — disalin dari
   `ui-context.md` atau diumumkan kalau baru (lalu `ui-context.md`
-  diperbarui lewat `@selcy-sync`, bukan di sini diam-diam)
+  diperbarui lewat `/selcy-sync`, bukan di sini diam-diam)
 - **Keputusan inkonsistensi**: perbedaan antar-frame yang disengaja +
   alasan (misalnya "chip status kolom di desktop, baris di mobile —
   mengikuti frame M02")
@@ -198,7 +198,7 @@ Setiap run menulis satu file note, minimal berisi:
 - **State yang tidak digambarkan**: loading/error/empty — dari mana
   (ui-context.md default)
 
-File ini adalah apa yang `@selcy-implement` baca sebagai kontrak visual,
+File ini adalah apa yang `/selcy-implement` baca sebagai kontrak visual,
 bersama `-ref.html`.
 
 ## Execution
@@ -213,7 +213,7 @@ bersama `-ref.html`.
 
 ### Step 1: Design kickoff (sekali per proyek)
 
-Sekali, setelah `@selcy-sdd` selesai dan sebelum fitur UI pertama:
+Sekali, setelah `/selcy-sdd` selesai dan sebelum fitur UI pertama:
 
 1. Baca `context/ui-context.md` — ambil token (warna, font, radius) sebagai
    variabel di `.pen` (lewat `SetVariables` di interactive mode atau minta
@@ -249,7 +249,7 @@ Tulis `design/NN-<nama>.md` (lihat format di atas). Update
 Kirim PNG + `.pen` + `-ref.html` ke engineer (MEDIA: paths, satu per baris).
 Lapor: frame apa yang dibuat, keputusan inkonsistensi apa yang diambil,
 komponen siap pakai apa yang dipakai, dan tidak ada langkah verifikasi yang
-dilewati. Next step selalu: `@selcy-implement NN` di chat baru.
+dilewati. Next step selalu: `/selcy-implement NN` di chat baru.
 
 ## What this skill never does
 
@@ -257,9 +257,9 @@ dilewati. Next step selalu: `@selcy-implement NN` di chat baru.
 - Never melanjutkan saat frame kontradiktif — resolve di sini, bukan di build.
 - Never mengABAIKAN quality bar (antislop, aksesibilitas, touch target).
 - Never mengedit `ui-context.md` langsung — perubahan token adalah
-  keputusan engineer, lewat `@selcy-sync`.
+  keputusan engineer, lewat `/selcy-sync`.
 - Never mendesain dua fitur dalam satu run.
-- Never menulis kode aplikasi — itu `@selcy-implement`'s.
+- Never menulis kode aplikasi — itu `/selcy-implement`'s.
 
 ## Portability
 

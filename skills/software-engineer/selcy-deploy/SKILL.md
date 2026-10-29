@@ -1,7 +1,7 @@
 ---
 name: selcy-deploy
 allowed-tools: Bash, Read, Grep, Glob, Write, Agent
-description: "Run @selcy-deploy when deploying or handing off a project: Cloudflare Pages/Workers, Supabase Edge Functions, env build vs CI secrets, GPS/HTTPS and browser-context requirements. Captures the operational knowledge that cost real hours to learn, so the next deploy does not rediscover it. Deploy playbook + preflight checks."
+description: "Run /selcy-deploy when deploying or handing off a project: Cloudflare Pages/Workers, Supabase Edge Functions, env build vs CI secrets, GPS/HTTPS and browser-context requirements. Captures the operational knowledge that cost real hours to learn, so the next deploy does not rediscover it. Deploy playbook + preflight checks."
 ---
 
 ## What this skill does
@@ -27,7 +27,7 @@ These are the facts, each with the failure it prevents. None of them is general 
 
 `.env.local` and friends are **build-time** inputs for a Vite app: Vite bakes `VITE_*` vars into the production bundle at build time. On Cloudflare Pages, the build runs in CI, where `.env.local` does not exist — so you must configure the vars in the Pages project (dashboard or `wrangler pages secret put`), or pass them explicitly to the local build command when you need a preview build.
 
-The failure: you build locally with `.env.local`, deploy, and the app silently points at the wrong (or empty) backend because the CI build had different vars baked in. **Rule: whatever env the deployed bundle runs with must be decided explicitly at build time — never inherited from the developer's machine.** The same rule makes test builds deterministic (see `@selcy-test`'s build-env-leak section; this is the production side of that same fact).
+The failure: you build locally with `.env.local`, deploy, and the app silently points at the wrong (or empty) backend because the CI build had different vars baked in. **Rule: whatever env the deployed bundle runs with must be decided explicitly at build time — never inherited from the developer's machine.** The same rule makes test builds deterministic (see `/selcy-test`'s build-env-leak section; this is the production side of that same fact).
 
 ### Cloudflare Workers — custom domains
 
@@ -78,12 +78,12 @@ Any fail → stop. Report the failure and the fix from the knowledge base above.
 
 Write the runbook to `docs/DEPLOY.md` (or append to the project's existing runbook): the stack, the env table per environment, the secrets inventory, the domain registration state, and the preflight results with dates. This is the handoff document — a client receiving the project should be able to re-run the deploy from it without asking you anything.
 
-Cross-reference `context/architecture-context.md` when its env var table changes; `@selcy-sync` catches the specs that go stale when you edit it.
+Cross-reference `context/architecture-context.md` when its env var table changes; `/selcy-sync` catches the specs that go stale when you edit it.
 
 ## What this skill never does
 
 - Never deploys itself. It prepares and audits; the engineer (or CI) runs the deploy command.
-- Never edits `context/` contracts directly; it reports gaps and lets `@selcy-sync` propagate.
+- Never edits `context/` contracts directly; it reports gaps and lets `/selcy-sync` propagate.
 - Never guesses a deploy target. If the bundle does not name one, that is an owed decision.
 - Never treats a failed preflight as a warning. A fail is a stop.
 

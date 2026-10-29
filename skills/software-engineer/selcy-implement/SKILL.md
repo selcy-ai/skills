@@ -74,7 +74,7 @@ Any required value with no named source is an owed decision. Do not judge this b
 Also owed, without enumerating:
 
 - a provider, library, or integration not already in the stack table or the env var table,
-- **A whole page or screen whose composition `ui-context.md` and the spec together do not pin down.** This is exactly what `@selcy-design` exists to settle: if the spec carries a `## Design Reference`, the mockup (and its exported `design/<project>-ref.html`) is the named source for the page's composition, and this bullet is satisfied by it.
+- **A whole page or screen whose composition `ui-context.md` and the spec together do not pin down.** This is exactly what `/selcy-design` exists to settle: if the spec carries a `## Design Reference`, the mockup (and its exported `design/<project>-ref.html`) is the named source for the page's composition, and this bullet is satisfied by it.
 - **A behavior that is not trivial (search, generation, wizards, payment flows)**,
 - **A permission or ownership rule (who may read or mutate what)**,
 - **Money or timezone handling, if the bundle never settled the rule and this feature touches it.**
@@ -83,7 +83,7 @@ Also owed, without enumerating:
 
 **Design reference wins.** If the feature spec names a `## Design Reference`
 (`design/<name>.pen` or PNG at the project root, or `design/NN-*.md` +
-`design/<project>-ref.html` from `@selcy-design`), build the UI to that frame:
+`design/<project>-ref.html` from `/selcy-design`), build the UI to that frame:
 layout, hierarchy, and states follow the prototype, not a fresh reading of the
 tokens. If the prototype contradicts `ui-context.md`, the prototype wins and
 you say so in the handoff (the engineer updates `ui-context.md` from the
