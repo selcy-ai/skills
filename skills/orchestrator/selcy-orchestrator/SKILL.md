@@ -149,6 +149,13 @@ This is the difference between one session per feature and three. If you skip th
 
 The command always names `@selcy-implement` and the feature, nothing else. What changes is whether the session is new or resumed.
 
+**The skill prefix is not fixed — it depends on the harness that runs inside `opencode run`.** Write the command with the prefix that harness uses to load a skill, because a skill written with the wrong prefix is plain text and the delegation silently degrades into a hand-rolled prompt — the exact failure this delegation exists to avoid. Two prefixes are in play across the agents this repo supports:
+
+- `@selcy-implement` — OpenCode in the configuration where `/` is reserved for harness commands (`/compact`, `/clear`) and `@` is what loads a skill.
+- `/selcy-implement` — the slash-invocation convention most other coding agents use.
+
+The commands below are written with `@`. If the harness on the other end of `opencode run` uses `/`, use `/selcy-implement <NN>` instead — same skill, same feature, one character different. Do not invent a third form, do not wrap the skill call in extra prose to "make sure it loads", and do not substitute a paraphrase when the prefix is uncertain: prefix-unknown is a question for the engineer, not a prompt the worker writes itself. The skill name and the feature number stay identical either way; only the prefix changes.
+
 #### B1a. First delegation — create the session
 
 ```bash
@@ -200,6 +207,7 @@ The same command works on resume as on the first run, and that is deliberate. `@
 Rules that make this safe:
 
 - **Delegate, do not paraphrase.** The command names the skill and the feature, nothing else. Do not restate the spec, do not add requirements, do not scope it. `@selcy-implement` reads the spec; your summary can only lose information.
+- **Match the harness's skill prefix.** The only permitted variation on the command is the one-character prefix above (`@` or `/`). Everything else — the skill name, the feature number, the absence of extra prose — is fixed.
 - **One feature per run.** Never two. A failure must stay contained to one feature.
 - **`--dir` pins the working directory.** The worker may be running from elsewhere; the build must happen in the project directory.
 - **Heartbeat while you wait.** `opencode run` is synchronous and can take many minutes. Call `kanban_heartbeat(note="delegated <NN> to opencode run, waiting")` while it runs, at least once an hour. Without a heartbeat the dispatcher may reclaim the card mid-build and you lose the run.
@@ -227,6 +235,8 @@ Create a session named `feat-<NN>-<slug>-review`, on a **different model than th
 opencode run --dir <project-dir> --title "feat-<NN>-<slug>-review" --model <review-model> --auto "Run @selcy-check review <NN>. The feature spec is context/feature-specs/<NN-name>.md."
 ```
 
+Same prefix rule as B1: `@` here, `/selcy-check` if that is what the harness on the other end loads.
+
 This delegates to the real skill rather than a hand-rolled review prompt, and that matters: `@selcy-check review` ranks findings by severity (blocks close, should fix, nit), **drops findings that contradict a standards file the code correctly follows** — the standards file is the contract, not the reviewer's taste — and writes the ranked findings to `context/.reviews/<feature>.md` where the engineer can read them later. A review prompt the worker invented itself carries none of that, and silently promotes the reviewer's taste over the project's contract.
 
 The `--model` you pass is the session's model. `@selcy-check review` may spawn its own reviewer subagent on a model it picks; either way its one rule holds — never the model that wrote the code — so the engineer's choice and the skill's rule are both satisfied. When there is no subagent support it reviews inline on the session model you named, and says so in the report.
@@ -242,6 +252,8 @@ Create a session named `feat-<NN>-<slug>-test`, on the model the engineer named 
 ```bash
 opencode run --dir <project-dir> --title "feat-<NN>-<slug>-test" --model <test-model> --auto "Run @selcy-test <NN>. The feature spec is context/feature-specs/<NN-name>.md."
 ```
+
+Same prefix rule as B1: `@` here, `/selcy-test` if that is what the harness on the other end loads.
 
 **This is a real delegation now, and the reason it used not to be is fixed.**
 `@selcy-test` used to scope from uncommitted changes only — `git diff` plus
@@ -286,6 +298,8 @@ If every checklist item is addressed, the reviewer found nothing blocking, the s
 ```bash
 opencode run --dir <project-dir> --title "feat-<NN>-<slug>-verify" --model <verify-model> --auto "Run @selcy-check verify <NN>. The feature spec is context/feature-specs/<NN-name>.md."
 ```
+
+Same prefix rule as B1: `@` here, `/selcy-check` if that is what the harness on the other end loads.
 
 `@selcy-check verify` runs the real app and reports what it actually observed, per item. Use it when the desk check cannot settle an item; do not run it by default, it costs a real app boot per feature.
 
