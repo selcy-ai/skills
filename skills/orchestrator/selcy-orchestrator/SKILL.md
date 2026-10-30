@@ -6,7 +6,7 @@ description: "Turns an approved @selcy-sdd spec bundle into a kanban board of fe
 
 ## What this skill does
 
-The automation layer for [skills](https://github.com/maulanaadib/skills). It turns an approved spec bundle into a built product with no further human attention.
+The automation layer for [skills](https://github.com/selcy-ai/skills). It turns an approved spec bundle into a built product with no further human attention.
 
 `@selcy-sdd` writes the bundle. You approve the plan. Then this skill takes over: it reads `context/progress-tracker.md`, creates one kanban card per remaining feature, and the dispatcher keeps spawning the orchestrator profile to work them until the tracker says every feature is done or something needs a human.
 
@@ -31,6 +31,7 @@ Every dispatcher tick is a fresh turn. A gateway restart, a reclaimed card, a ne
 So the worker treats its own turn as stateless and writes everything the next tick needs somewhere durable:
 
 - **The build session id** → a card comment and the card metadata, written before the run finishes, not after.
+- **The skill prefix the build harness loads** (`@` or `/`) → a card comment, the card metadata, and `context/progress-tracker.md`, detected once per project and reused on every delegation after that. Without this, every tick re-derives or guesses how to load a skill, and a wrong prefix silently turns the delegation into a hand-rolled prompt.
 - **The review and test model choices** → a card comment, asked once and reused.
 - **The block reason and the resume command** → the card, and also the reply to the engineer.
 - **Feature progress** → `context/progress-tracker.md`, which is the file B0 reads first for exactly this reason.
@@ -57,27 +58,30 @@ All four must be true, or the skill stops and says which one is missing:
 3. `opencode` is on PATH and can run in the project directory.
 4. The kanban toolset is enabled on the profile running this skill (`hermes tools enable kanban` on the current profile). Without it the `kanban_*` tools are not in the schema and the worker cannot close its own card. **There is no separate `selcy-orchestrator` profile to create** — the profile that runs this skill is the worker. If you are running this in the `selcy` profile, `selcy` *is* the orchestrator the dispatcher spawns; `assignee="selcy-orchestrator"` in the card below names the role, and the profile running the skill fills it. A project whose profile has the kanban tools is autopilot-ready; one that does not, runs hybrid (see the Scheduling section). Both modes delegate to the same `@selcy-implement` / `@selcy-check` / `@selcy-test` commands.
 
-The skill never creates a bundle, never edits the feature list, and never runs `@selcy-sdd`, `@selcy-audit`, or `@selcy-sdd change`. If the bundle is missing, that is a human decision about what to build; tell the engineer which door applies: `@selcy-sdd` on a new project, `@selcy-audit` on a codebase that already exists, `@selcy-sdd change` on a bundle that exists and needs a deliberate edit.
+The skill never edits the feature list and never runs `@selcy-audit` or `@selcy-sdd change` — those are the other two doors into a bundle, and if the bundle exists they stay named, never run. `@selcy-sdd` is the single and only exception, and it fires exactly once per project: **at bootstrap, when there is no `context/` bundle to read.**
 
-## The ten skills, and what this orchestrator does with each
+When `context/` is missing or empty at Phase A0, do not stop and do not name the skill for the engineer to run themselves. Run `@selcy-sdd` in the project directory, once. It will ask its interview questions about what to build. **You are the relay, not the answerer:** reproduce every question verbatim to the engineer, wait for the human's answers, feed them back, and let the skill write the bundle. Do not shorten the interview, do not answer on the engineer's behalf, do not guess a scope — the whole point of the gate is that the human decides what gets built. The moment `context/progress-tracker.md` exists and names a Current Goal, the gate closes and the orchestrator continues on its own: cards, delegation, the full loop. It never runs `@selcy-sdd` again for this project — a bundle that already exists and needs a deliberate edit is `@selcy-sdd change`, which stays named, never run, and a codebase that already exists is `@selcy-audit`, also named, never run.
 
-The suite has ten skills and this orchestrator has exactly three relationships to them. Knowing which is which is the whole routing problem, because getting it backwards is the failure mode: delegating a skill that should only be named means the worker makes a decision that belongs to the engineer, and naming a skill that should be delegated means the worker hand-rolls a worse version of it.
+## The twelve skills, and what this orchestrator does with each
+
+The suite has twelve skills and this orchestrator has exactly three relationships to them. Knowing which is which is the whole routing problem, because getting it backwards is the failure mode: delegating a skill that should only be named means the worker makes a decision that belongs to the engineer, and naming a skill that should be delegated means the worker hand-rolls a worse version of it.
 
 | Skill | Relationship | Why
 | --- | --- | --- |
-| `@selcy-sdd` | **Never runs it. Names it.** | Creating the bundle is a human decision about what to build. |
+| `@selcy-sdd` | **Names it — one gated exception.** | Creating the bundle is a human decision about what to build, so it is named, never run. The single exception is bootstrap with no `context/` bundle at all: the orchestrator runs it once there, relaying its interview to the engineer verbatim and waiting on the human's answers (see Prerequisites). |
 | `@selcy-audit` | **Never runs it. Names it.** | Same, on a codebase that already exists. |
 | `@selcy-sdd change` | **Never runs it. Names it.** | A deliberate change to a bundle that exists. The change spec it writes is worked like any feature. |
+| `@selcy-design` | **Delegates to it, when the spec says so.** | A spec carrying a `## Design Reference` gets its design built before its builder: the design session appends the feature's screens to the project's single `.pen` file, exports `-ref.html` and PNG for each, and writes `design/NN-*.md`. On API-only and single-screen products the spec carries no `## Design Reference`, so design is never invoked — it is not a stage every feature gets. |
 | `@selcy-implement` | **Delegates to it.** The build session runs `@selcy-implement <NN>`, which resolves the feature, runs the input coverage gate, builds, runs Check When Done, updates the tracker, and commits. |
 | `@selcy-check` | **Delegates to it.** | The review stage runs `@selcy-check review`; `verify` is delegated when the desk check leaves an item unproven. |
-|| `@selcy-test` | **Delegates to it.** | The test stage runs `@selcy-test <NN>` in its own session. It used to be the one exception — it scoped from uncommitted changes, but the builder already committed — so the skill now scopes from the feature's tag/committed range when the tree is clean (see B3b). |
+| `@selcy-test` | **Delegates to it.** | The test stage runs `@selcy-test <NN>` in its own session. It used to be the one exception — it scoped from uncommitted changes, but the builder already committed — so the skill now scopes from the feature's tag/committed range when the tree is clean (see B3b). |
 | `@selcy-debug` | **Never runs it. Names it.** | When a failure is a bug rather than an owed decision, the engineer's fix tool is this, in the build session. |
 | `@selcy-grill` | **Never runs it. Names it.** | When the block is an owed decision, this is how the engineer settles it properly instead of answering under pressure. |
 | `@selcy-debt` | **Never runs it. Names it.** | When the builder surfaced a pre-existing bug in a surface this feature did not build. |
 | `@selcy-sync` | **Never runs it. Names it.** | After the engineer edits a standards file, and after a change lands, to catch the specs it made stale. |
 | `@selcy-deploy` | **Never runs it. Names it.** | Deploy/handoff time. It runs preflight checks and writes the runbook; the orchestrator names it when the tracker says every feature is done and a deploy or handoff is next. |
 
-**The rule behind the table:** the orchestrator delegates the three skills that do work inside a build (implement, check, test) and only names the eight that decide, record, or maintain contracts. A worker that runs `@selcy-grill` itself is a worker answering an owed decision on the engineer's behalf, which the never-does list forbids; a worker that hand-rolls `@selcy-check review` is a worker that drops the severity ranking and the standards-file-is-contract rule that make the review worth spawning.
+**The rule behind the table:** the orchestrator delegates the four skills that do work inside a build (design when the spec carries a `## Design Reference`, implement, check, test) and only names the eight that decide, record, or maintain contracts. A worker that runs `@selcy-grill` itself is a worker answering an owed decision on the engineer's behalf, which the never-does list forbids; a worker that hand-rolls `@selcy-check review` is a worker that drops the severity ranking and the standards-file-is-contract rule that make the review worth spawning.
 
 ## Phase A: Bootstrap the board
 
@@ -120,9 +124,9 @@ Rules that make this safe:
 - **Idempotency.** If you are not sure whether the cards already exist, `kanban_list(status="todo")` first and skip the ones already created. Re-running bootstrap must not duplicate cards.
 
 **Ask the concurrency question once, here.** Before finishing bootstrap, ask
-the engineer (see the Concurrency section for the exact panel). Default 2 if
-unanswered. Record the answer in a comment on the first card and in
-`progress-tracker.md`; reuse it for every wave.
+the engineer (see the Concurrency section for the exact panel). Default 1 if
+unanswered — serial, one feature at a time. Record the answer in a comment on
+the first card and in `progress-tracker.md`; reuse it for every wave.
 
 ### A2. Report and finish
 
@@ -149,12 +153,14 @@ This is the difference between one session per feature and three. If you skip th
 
 The command always names `@selcy-implement` and the feature, nothing else. What changes is whether the session is new or resumed.
 
-**The skill prefix is not fixed — it depends on the harness that runs inside `opencode run`.** Write the command with the prefix that harness uses to load a skill, because a skill written with the wrong prefix is plain text and the delegation silently degrades into a hand-rolled prompt — the exact failure this delegation exists to avoid. Two prefixes are in play across the agents this repo supports:
+**The skill prefix is not fixed — it depends on the harness that runs inside `opencode run`, so detect it once and remember it.** A skill written with the wrong prefix is plain text, and the delegation silently degrades into a hand-rolled prompt — the exact failure this delegation exists to avoid. So the worker determines the prefix **once per project**, before the first delegation, and after that it is settled for every tick and every wave:
 
-- `@selcy-implement` — OpenCode in the configuration where `/` is reserved for harness commands (`/compact`, `/clear`) and `@` is what loads a skill.
-- `/selcy-implement` — the slash-invocation convention most other coding agents use.
+1. **Detect.** Two prefixes are in play across the agents this repo supports: `@selcy-implement` — OpenCode in the configuration where `/` is reserved for harness commands (`/compact`, `/clear`) and `@` is what loads a skill; and `/selcy-implement` — the slash-invocation convention most other coding agents use. Detection hints, in order: the engineer's answer if they gave one; the harness the build actually ran on (a `opencode.jsonc` that loads skills via `@`, or a harness whose docs invoke skills with `/`); the prefix this orchestrator itself was invoked with is **not** evidence — the orchestrator runs wherever the engineer called it (Hermes calls it as `/selcy-orchestrator`), while the build runs inside whatever harness `opencode run` spawns. Those are two different contexts and one does not follow from the other.
+2. **Record it durably.** The worker has no memory between ticks, so the prefix must survive one: write it in a card comment **and** in the card metadata, and write it in `context/progress-tracker.md`. A prefix held only in this turn's memory is a prefix the next tick re-derives, or guesses.
+3. **Reuse it.** Every delegation after that — build, resume, review, test, verify, every feature, every wave — uses the recorded prefix. Do not re-ask, do not re-derive, do not vary it per feature.
+4. **Unknown is a question, not a guess.** If detection returns nothing and the engineer has not answered, ask the engineer which prefix the build harness loads and block the card until they answer. Do not try both, do not wrap the skill call in extra prose to "make sure it loads", and do not substitute a paraphrase — prefix-unknown is a question for the engineer, not a prompt the worker writes itself.
 
-The commands below are written with `@`. If the harness on the other end of `opencode run` uses `/`, use `/selcy-implement <NN>` instead — same skill, same feature, one character different. Do not invent a third form, do not wrap the skill call in extra prose to "make sure it loads", and do not substitute a paraphrase when the prefix is uncertain: prefix-unknown is a question for the engineer, not a prompt the worker writes itself. The skill name and the feature number stay identical either way; only the prefix changes.
+The commands below are written with `@`. If the recorded prefix is `/`, use `/selcy-implement <NN>` instead — same skill, same feature, one character different. Do not invent a third form. The skill name and the feature number stay identical either way; only the prefix changes.
 
 #### B1a. First delegation — create the session
 
@@ -207,7 +213,7 @@ The same command works on resume as on the first run, and that is deliberate. `@
 Rules that make this safe:
 
 - **Delegate, do not paraphrase.** The command names the skill and the feature, nothing else. Do not restate the spec, do not add requirements, do not scope it. `@selcy-implement` reads the spec; your summary can only lose information.
-- **Match the harness's skill prefix.** The only permitted variation on the command is the one-character prefix above (`@` or `/`). Everything else — the skill name, the feature number, the absence of extra prose — is fixed.
+- **Use the recorded prefix.** The one permitted variation is the single-character prefix settled once per project by the detection rule above (`@` or `/`). Everything else — the skill name, the feature number, the absence of extra prose — is fixed.
 - **One feature per run.** Never two. A failure must stay contained to one feature.
 - **`--dir` pins the working directory.** The worker may be running from elsewhere; the build must happen in the project directory.
 - **Heartbeat while you wait.** `opencode run` is synchronous and can take many minutes. Call `kanban_heartbeat(note="delegated <NN> to opencode run, waiting")` while it runs, at least once an hour. Without a heartbeat the dispatcher may reclaim the card mid-build and you lose the run.
@@ -232,7 +238,7 @@ Create a session named `feat-<NN>-<slug>-review`, on a **different model than th
 **Which model is the engineer's call, so ask.** Before the first review on a project, ask the engineer which model to use for review, and which for test. Record both answers in a card comment, and reuse them for every feature after that — the engineer should not have to answer twice. If the engineer has not answered yet, **do not silently fall back to the builder model and call it a review**. Ask, and block the card until they answer. A same-model review is weaker, and the engineer decides whether to accept that, not the worker.
 
 ```bash
-opencode run --dir <project-dir> --title "feat-<NN>-<slug>-review" --model <review-model> --auto "Run @selcy-check review <NN>. The feature spec is context/feature-specs/<NN-name>.md."
+opencode run --dir <project-dir> --title "feat-<NN>-<slug>-review" --model <review-model> --auto "@selcy-check review <NN>"
 ```
 
 Same prefix rule as B1: `@` here, `/selcy-check` if that is what the harness on the other end loads.
@@ -250,7 +256,7 @@ Record the review session id in the card the same way as the build session.
 Create a session named `feat-<NN>-<slug>-test`, on the model the engineer named for test. The tester reads the spec and the code and writes the suite.
 
 ```bash
-opencode run --dir <project-dir> --title "feat-<NN>-<slug>-test" --model <test-model> --auto "Run @selcy-test <NN>. The feature spec is context/feature-specs/<NN-name>.md."
+opencode run --dir <project-dir> --title "feat-<NN>-<slug>-test" --model <test-model> --auto "@selcy-test <NN>"
 ```
 
 Same prefix rule as B1: `@` here, `/selcy-test` if that is what the harness on the other end loads.
@@ -281,7 +287,7 @@ the skill's, not something the orchestrator re-derives per feature.
 
 The tester writes tests and runs them. It does not fix the implementation when they go red — that goes back to the builder, in the build session, via B4.
 
-#### B3c. Read all three results
+#### B3c. Read all five results
 
 Only now do you judge the feature. Read, in order:
 
@@ -296,7 +302,7 @@ If every checklist item is addressed, the reviewer found nothing blocking, the s
 **A checklist item the builder addressed but did not prove is not addressed.** "The builder said it works" is a claim, and this skill's own rule is that green output is a claim, not proof. When the output leaves an item genuinely unproven — a state the spec names that nobody exercised, a surface nobody opened — delegate the proof instead of accepting the claim:
 
 ```bash
-opencode run --dir <project-dir> --title "feat-<NN>-<slug>-verify" --model <verify-model> --auto "Run @selcy-check verify <NN>. The feature spec is context/feature-specs/<NN-name>.md."
+opencode run --dir <project-dir> --title "feat-<NN>-<slug>-verify" --model <verify-model> --auto "@selcy-check verify <NN>"
 ```
 
 Same prefix rule as B1: `@` here, `/selcy-check` if that is what the harness on the other end loads.
@@ -353,7 +359,7 @@ If the failure came from review or test, name those sessions in the block reason
 - Never batches features. One per card, one per delegation, always.
 - Never retries a failed delegation automatically. A retry without new information is the same failure again. The card stays blocked until a human unblocks it.
 - Never marks a feature complete itself. It reads the tracker; the builder writes it. `kanban_complete` is called only when the tracker says every feature is done.
-- Never runs any of the ten skills in its own session. The three it delegates to — `@selcy-implement`, `@selcy-check`, and `@selcy-test` — run inside the delegated `opencode run` sessions, on the models it chose; the other seven it never runs at all, it names them to the engineer. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
+- Never runs any of the twelve skills in its own session. The four it delegates to — `@selcy-design` (only when the spec carries a `## Design Reference`), `@selcy-implement`, `@selcy-check`, and `@selcy-test` — run inside the delegated `opencode run` sessions, on the models it chose; the other eight it never runs at all, it names them to the engineer. `@selcy-sdd` is the single gated exception: it fires exactly once per project, at bootstrap, when there is no `context/` bundle to read — after that the gate closes and it is named like the rest. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
 - Never creates a second build session for a feature that already has one. An interrupted build is resumed, not restarted. `feat-04` and `feat-04-r1` running side by side is this rule failing.
 - Never lets the reviewer or the tester edit implementation code. They report; the build session fixes.
 - Never deletes a session the engineer may need. Probe and smoke sessions are the engineer's signal that something ran; deleting them silently is why the engineer stops trusting the session list. Name them in the report instead.
@@ -469,24 +475,27 @@ features whose dependencies are all in wave 1. And so on. The critical path
 (the longest chain) determines the minimum number of waves; everything off
 that chain is free parallelism.
 
-### Concurrency limit: 2 default, 3 if the engineer says so
+### Concurrency limit: 1 default (serial), more only if the engineer says so
 
 The concurrency limit is how many builds are allowed to be in flight at once.
-Default is **2**. The orchestrator asks once per project, at bootstrap:
+Default is **1** — serial, one feature at a time. The orchestrator asks once
+per project, at bootstrap:
 
-> Mode paralel: mau berapa build jalan bersamaan? (default 2, maksimal yang
-> pernah dipakai 3 — kebanyakan provider rate-limit di atas itu)
-> a. 2 (default, aman)
-> b. 3
-> c. Semua yang siap di gelombang ini (tidak dibatasi — risiko rate-limit
+> Mode paralel: mau berapa build jalan bersamaan? (default 1 — satu per satu,
+> paling aman)
+> a. 1 (default, serial — aman)
+> b. 2
+> c. 3 (maksimal yang pernah dipakai — kebanyakan provider rate-limit di atas
+>    itu)
+> d. Semua yang siap di gelombang ini (tidak dibatasi — risiko rate-limit
 >    ditanggung project)
 
 The engineer picks; the orchestrator records the answer in the card/tracker
-and reuses it. If the engineer does not answer, **2 is used silently** — never
-more. Setting it higher than the number of ready features in the wave changes
-nothing; it is a cap, not a target. A rate-limit failure during a parallel
-wave blocks *that card* (B4) and the others keep running; it is not a reason
-to lower the limit for the project.
+and reuses it. If the engineer does not answer, **1 is used silently** —
+serial, never more. Setting it higher than the number of ready features in the
+wave changes nothing; it is a cap, not a target. A rate-limit failure during a
+parallel wave blocks *that card* (B4) and the others keep running; it is not a
+reason to lower the limit for the project.
 
 ### Fan-out and fan-in
 
