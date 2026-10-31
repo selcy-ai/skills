@@ -4,6 +4,35 @@ allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Agent
 description: "Turns an approved @selcy-sdd spec bundle into a kanban board of feature cards, then works them one at a time as the dispatcher spawns it. Each card delegates one feature to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review session and an independent test session, verifies against the spec's Check When Done, and completes or blocks. Fully autonomous once the bundle is approved — the board is the trigger."
 ---
 
+## Contents
+
+- [What this skill does](#what-this-skill-does)
+- [The session contract](#the-session-contract)
+- [The worker has no memory between ticks](#the-worker-has-no-memory-between-ticks)
+- [The trigger](#the-trigger)
+- [Prerequisites](#prerequisites)
+- [The twelve skills, and what this orchestrator does with each](#the-twelve-skills-and-what-this-orchestrator-does-with-each)
+- [Phase A: Bootstrap the board](#phase-a-bootstrap-the-board)
+  - [A0. Confirm the gate state](#a0-confirm-the-gate-state)
+  - [A1. Create one card per remaining feature](#a1-create-one-card-per-remaining-feature)
+  - [A2. Report and finish](#a2-report-and-finish)
+- [Phase B: The worker loop](#phase-b-the-worker-loop)
+  - [B0. Read the card](#b0-read-the-card)
+  - [B1. Delegate one feature](#b1-delegate-one-feature)
+  - [B2. Read the result](#b2-read-the-result)
+  - [B3. Review and test, in separate sessions](#b3-review-and-test-in-separate-sessions)
+  - [B4. Block and report](#b4-block-and-report-and-hand-the-fix-back-to-the-build-session)
+- [What this skill never does](#what-this-skill-never-does)
+- [Session hygiene](#session-hygiene)
+- [When to stop the whole run, not just one card](#when-to-stop-the-whole-run-not-just-one-card)
+- [How to resume after a stop](#how-to-resume-after-a-stop)
+- [Portability](#portability)
+- [Scheduling: the dependency graph, waves, and parallel execution](#scheduling-the-dependency-graph-waves-and-parallel-execution)
+  - [What an edge means](#what-an-edge-means)
+  - [Waves](#waves)
+  - [Concurrency limit](#concurrency-limit-1-default-serial-more-only-if-the-engineer-says-so)
+  - [Fan-out and fan-in](#fan-out-and-fan-in)
+
 ## What this skill does
 
 The automation layer for [skills](https://github.com/selcy-ai/skills). It turns an approved spec bundle into a built product with no further human attention.
