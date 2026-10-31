@@ -1,7 +1,7 @@
 ---
 name: selcy-design
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, AskUserQuestion
-description: "Run /selcy-design before /selcy-implement for any feature whose spec carries a ## Design Reference. Appends the feature's screens as frames in the project's single .pen file (never one file per page), resolves cross-frame inconsistencies before they reach the builder, exports html-tailwind or html-css plus PNG, and writes design/NN-name.md naming frame ids and tokens. Pair worker with /selcy-implement for UI."
+description: "Run /selcy-design before /selcy-implement for any feature whose spec carries a ## Design Reference. Works on two backends — pen.dev CLI (Linux) or Open Design (VS Code / Windows / opencode) — recorded once in ui-context.md. Either way it appends the feature's screens to the project's single design collection, resolves cross-screen inconsistencies before they reach the builder, exports the builder's -ref.html plus PNG, and writes design/NN-name.md naming screens and tokens. Pair worker with /selcy-implement for UI."
 ---
 
 # selcy-design — design worker for the SELCy loop
@@ -31,12 +31,37 @@ one chat — a mistake in one must not reach the other.
 2. `context/ui-context.md` — the design system: colors, typography, radius,
    component conventions. If the project has done a design kickoff, the
    tokens live here and in the `.pen` file's variables.
-3. The project's single `.pen` file (path named in `ui-context.md`, default
-   `design/<project>.pen`) — appended to, never replaced.
+3. The project's single design collection. Backend A: the `.pen` file
+   (path named in `ui-context.md`, default `design/<project>.pen`) —
+   appended to, never replaced. Backend B: the Open Design `collectionId`
+   (recorded in `ui-context.md` and `design/00-kickoff.md`).
 4. Prior `design/NN-*.md` notes — for consistency with screens already
    designed, not for re-reading the whole history.
 
-## The single .pen rule
+## The two backends
+
+Skill ini punya dua backend. Pilihannya diambil **sekali per proyek, saat
+wawancara `/selcy-sdd`**, dan direkam di `context/ui-context.md` sebagai
+baris `design backend: pen` atau `design backend: open-design`. Bukan
+per-run, dan bukan keputusan orchestrator — orchestrator hanya melihat
+`## Design Reference` dan mendelegasikan. Kalau baris itu tidak ada saat
+run pertama, tanyakan ke engineer dan tulis dulu ke `ui-context.md`.
+
+| | Backend A — pen.dev | Backend B — Open Design |
+|---|---|---|
+| Host | Linux, `pen` CLI terpasang | Windows / VS Code / opencode, MCP Open Design |
+| Bentuk karya | satu `.pen`, semua screen jadi frame di dalamnya | satu HTML per screen, semuanya dalam satu `collectionId` |
+| Untuk builder | `design/<project>-ref.html` | `design/NN-<slug>-ref.html` + index `design/<project>-ref.html` |
+| Untuk manusia | PNG per frame | PNG per screen |
+| Pengganti `.pen` utuh | `.pen` itu sendiri | index `design/<project>-ref.html` |
+| PDF | — | **tertunda.** Open Design export PDF per artifact, tidak menggabungkan semua screen jadi satu PDF; sekarang pakai PNG per screen dulu |
+
+**Nama artifak yang diterima downstream (`/selcy-implement`,
+`/selcy-check`) sama di kedua backend**: `design/NN-*.md` selalu ada,
+`-ref.html` selalu ada, PNG selalu ada. Jangan pernah mengubah penamaan
+itu — tujuh file lain menganggap kontrak ini tetap.
+
+## Backend A's shape: the single .pen rule
 
 **One product = one `.pen` file.** All screens of all features live as
 frames in that one file. Never create `dashboard.pen`, `report-form.pen`,
@@ -107,7 +132,7 @@ Aturan pakai: **tiru pola, bukan copy hasil** — urutan blok, gerakan, ritme
 wajib dicatat di `design/NN-*.md` (sumber + pola yang diambil), agar
 tertelusuri dan engineer tahu dari mana suatu keputusan desain berasal.
 
-## The tool: pen.dev CLI
+## Backend A — the pen.dev CLI
 
 Models change; the contract does not. Use whatever provider the project
 state names. On this host the working invocation is:
@@ -157,7 +182,7 @@ sendiri, hasilnya menyimpang). Aturan:
 - Jika mockup tidak bisa menunjukkan sebuah state (loading, error, kosong),
   tandai sebagai kosong — builder mengambilnya dari `ui-context.md`.
 
-## Export — the handoff artifacts
+## Backend A — Export — the handoff artifacts
 
 Setelah frame final, export **dua** hal (PNG untuk manusia, HTML untuk
 builder):
@@ -182,11 +207,80 @@ sekaligus akan menolak urutan terlalu panjang. Catatan: `export-type` CLI
 flag hanya mendukung png/jpeg/webp/pdf; HTML harus lewat `Export` di
 interactive mode.
 
+## Backend B — Open Design (Windows, VS Code, opencode)
+
+Backend untuk host tanpa `pen` CLI. Semua interaksi lewat tool Open
+Design (MCP — sudah terpasang di VS Code dan opencode). Lihat tabel di
+atas untuk pemetaan artifaknya; aturan di bawah adalah urutan kerjanya.
+
+### Design system bridge (sekali per proyek)
+
+`ui-context.md` adalah sumber kebenaran. Sekali, saat design kickoff:
+pindahkan tokennya (warna, font, radius) menjadi design system Open Design
+lewat `create_open_design_design_system` (name = nama proyek), lalu
+`set_active_design_system`. Setiap screen memakai design system ini —
+jangan biarkan Open Design memakai token acak. Kalau `ui-context.md`
+berubah (lewat `/selcy-sync`), perbarui design system-nya juga. Satu
+arah: `ui-context.md` → design system, tidak pernah sebaliknya.
+
+### Tiap screen = satu artifact, semuanya dalam satu collection
+
+Aturan "satu produk = satu file" di backend B berarti: **satu
+`collectionId` per proyek** (slug, misalnya `bmkg-screens`), dipakai
+verbatim di setiap `prepare_open_design_brief` dan
+`register_open_design_artifact`. Artifact lepas tanpa collection = `.pen`
+per halaman, dilarang.
+
+Per screen:
+
+1. `prepare_open_design_brief` dengan `skillId` dari surface yang pas —
+   daftarnya lewat `list_open_design_skills` dengan `surface: "prototype"`
+   (mis. `od:prototype:web-prototype` untuk halaman desktop umum,
+   `od:prototype:saas-landing` untuk landing). `brief` berisi screen dari
+   `## Design Reference` + token; sertakan `collectionId`,
+   `collectionName`, `screenRole` (mis. `dashboard`), dan `screenTotal`.
+   Jangan pilih entry `stub: true`.
+2. Tulis HTML-nya sesuai instructions yang dikembalikan.
+3. `register_open_design_artifact` dengan `collectionId`/`collectionName`,
+   `screenIndex` (0-based), `screenRole`, kind `prototype`.
+4. `check_open_design_artifact` — render + preflight (overflow, kontras,
+   teks hilang, safe area). Fix setiap **error**, lihat screenshotnya
+   (balance, hierarki, area terlalu penuh/kosong), maksimal dua ronde
+   fix, lapor sisanya. Ini pengganti langkah "buka render PNG per frame"
+   backend A.
+5. Ulangi per screen. Mobile 390px (dan tablet 820px bila spec minta)
+   adalah **artifact terpisah** dalam collection yang sama, `screenRole`-nya
+   `<nama>-mobile`.
+
+Artifact dispesifikasikan dengan `screenTotal` agar `screenIndex` akurat;
+screen mobile ikut nomornya sendiri.
+
+### Backend B — Export — tiga artifak
+
+Setelah semua screen bersih dari `check`:
+
+- **PNG per screen** — `export_open_design_artifact` format `png`, scale 2,
+  satu per screen, disimpan ke `design/NN-<slug>.png`. Inilah yang
+  dikirim ke engineer.
+- **HTML builder** — format `standalone` per screen →
+  `design/NN-<slug>-ref.html`. HTML self-contained yang render-nya persis
+  seperti prototipe. Ini kontrak visual builder — struktur dan token,
+  bukan kode untuk dicopy.
+- **Index** — `design/<project>-ref.html`: satu halaman sederhana yang
+  me-link setiap `-ref.html` + PNG dari **semua** screen yang sudah jadi
+  (semua fitur, bukan cuma run ini). Ditulis ulang setiap run agar tetap
+  jadi peta isi — peran yang sama dengan frame `00 · Panduan` backend A.
+
+Backend B saat ini **tidak export PDF** (lihat tabel). Kalau engineer
+meminta satu PDF berisi semua halaman, catat sebagai permintaan tertunda
+di `design/NN-*.md` — bukan alasan memblokir run.
+
 ## Output: `design/NN-<nama>.md`
 
-Setiap run menulis satu file note, minimal berisi:
+Backend-neutral. Isi minimum setiap run:
 
 - **Frame index**: frame id + nama + breakpoint yang dibuat run ini
+  (backend B: `screenIndex` + `collectionId` + `screenRole`)
 - **Token yang dipakai**: warna (hex), font, radius — disalin dari
   `ui-context.md` atau diumumkan kalau baru (lalu `ui-context.md`
   diperbarui lewat `/selcy-sync`, bukan di sini diam-diam)
@@ -207,9 +301,12 @@ bersama `-ref.html`.
 
 - Spec punya `## Design Reference`? Tidak → stop, feature ini tidak butuh
   desain. Ya → lanjut.
-- `.pen` produk tidak ada → ini run pertama: jalankan **design kickoff**
-  (lihat bawah), bukan desain fitur.
-- `.pen` ada → desain fitur (Step 1).
+- Backend belum tercatat di `ui-context.md`? → tanyakan engineer, tulis
+  dulu baris `design backend:`-nya. Lanjut dengan backend yang tercatat.
+- Karya produk belum ada (backend A: `.pen`; backend B: `collectionId`
+  terdaftar) → ini run pertama: jalankan **design kickoff** (lihat bawah),
+  bukan desain fitur.
+- Karya sudah ada → desain fitur (Step 2).
 
 ### Step 1: Design kickoff (sekali per proyek)
 
@@ -226,17 +323,33 @@ Sekali, setelah `/selcy-sdd` selesai dan sebelum fitur UI pertama:
    setelah 10 frame ada adalah pekerjaan besar.
 4. Tulis `design/00-kickoff.md`.
 
+**Backend B:** ganti langkah 1–2 dengan **design system bridge**
+(`create_open_design_design_system` + `set_active_design_system` dari
+`ui-context.md`, lihat bagian Backend B), dan catat `collectionId` proyek
+di `design/00-kickoff.md`. Tidak ada frame `00 · Panduan` — peran index
+dipegang `design/<project>-ref.html`. Langkah 3 (PNG + persetujuan)
+tetap: ekspor PNG screen kickoff (shell navigasi saja) sebelum fitur
+pertama dibangun.
+
 ### Step 2: Design the feature
 
 1. Baca spec + `ui-context.md` + frame yang sudah ada di `.pen` (konsistensi).
 2. Terapkan quality bar (`antislop*`, `ui-ux-pro-max`, cek referensi
    komponen).
 3. Generate dengan prompt multi-frame, iterate dengan `--in/--out` sampai
-   frames ini benar.
+   frames ini benar. (Backend B: tiap screen adalah artifact baru dalam
+   collection yang sama; konsistensi dijaga oleh design system +
+   `screenRole`, bukan `--in/--out`.)
 4. **Verifikasi inkonsistensi**: buka render PNG per frame, bandingkan
    field/komponen yang sama antar breakpoint. Resolve sebelum export.
+   (Backend B: ini dijalankan `check_open_design_artifact` per artifact,
+   termasuk screenshot dan preflight.)
 5. Export PNG per frame + `-ref.html` (html-tailwind/html-css sesuai stack).
-6. Update frame `00 · Panduan` agar tetap menjadi indeks yang akurat.
+   (Backend B: tiga artifak di bagian Backend B — PNG per screen, `-ref.html`
+   per screen, index.)
+6. Update frame `00 · Panduan` (backend A) atau index
+   `design/<project>-ref.html` (backend B) agar tetap menjadi indeks yang
+   akurat.
 
 ### Step 3: Write the note
 
@@ -247,21 +360,34 @@ Tulis `design/NN-<nama>.md` (lihat format di atas). Update
 ### Step 4: Handoff
 
 Kirim PNG + `.pen` + `-ref.html` ke engineer (MEDIA: paths, satu per baris).
+Backend B: PNG per screen + `NN-<slug>-ref.html` + index
+`<project>-ref.html`; **tidak ada `.pen`** dan **tidak ada PDF** — kirim PNG
+saja. Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
+satu path per baris, di akhir setiap run. Tanpa pesan ini, engineer tidak
+menerima apa-apa.
 Lapor: frame apa yang dibuat, keputusan inkonsistensi apa yang diambil,
 komponen siap pakai apa yang dipakai, dan tidak ada langkah verifikasi yang
 dilewati. Next step selalu: `/selcy-implement NN` di chat baru.
 
 ## What this skill never does
 
-- Never membuat file `.pen` per halaman — satu produk, satu file.
+- Never membuat file `.pen` per halaman — satu produk, satu file. (Backend
+  B: satu `collectionId`, tidak pernah artifact lepas.)
+- Never membiarkan Open Design memakai token acak — selalu lewat design
+  system yang dibangun dari `ui-context.md`.
 - Never melanjutkan saat frame kontradiktif — resolve di sini, bukan di build.
 - Never mengABAIKAN quality bar (antislop, aksesibilitas, touch target).
 - Never mengedit `ui-context.md` langsung — perubahan token adalah
   keputusan engineer, lewat `/selcy-sync`.
 - Never mendesain dua fitur dalam satu run.
 - Never menulis kode aplikasi — itu `/selcy-implement`'s.
+- Never mengubah nama artifak (`design/NN-*.md`, `-ref.html`, PNG) —
+  tujuh skill lain bergantung pada kontrak itu di kedua backend.
 
 ## Portability
 
-Any Agent Skills client on macOS, Linux, Windows. `pen` CLI is the only
-required tool. Shell snippets are POSIX reference, not literal scripts.
+Any Agent Skills client on macOS, Linux, Windows. Backend A needs the
+`pen` CLI (Linux); backend B needs the Open Design MCP (VS Code, opencode,
+atau agent lain yang mendukung MCP). Salah satu harus ada; backend mana
+yang dipakai dicatat di `ui-context.md`. Shell snippets are POSIX
+reference, not literal scripts.
