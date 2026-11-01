@@ -246,8 +246,9 @@ Per screen:
 4. `check_open_design_artifact` — render + preflight (overflow, kontras,
    teks hilang, safe area). Fix setiap **error**, lihat screenshotnya
    (balance, hierarki, area terlalu penuh/kosong), maksimal dua ronde
-   fix, lapor sisanya. Ini pengganti langkah "buka render PNG per frame"
-   backend A.
+   fix, lapor sisanya. **Warning kontras juga wajib diperbaiki**, bukan
+   diabaikan — lihat aturan kontras di bagian design system bridge. Ini
+   pengganti langkah "buka render PNG per frame" backend A.
 5. Ulangi per screen. Mobile 390px (dan tablet 820px bila spec minta)
    adalah **artifact terpisah** dalam collection yang sama, `screenRole`-nya
    `<nama>-mobile`.
@@ -260,16 +261,20 @@ screen mobile ikut nomornya sendiri.
 Setelah semua screen bersih dari `check`:
 
 - **PNG per screen** — `export_open_design_artifact` format `png`, scale 2,
-  satu per screen, disimpan ke `design/NN-<slug>.png`. Inilah yang
-  dikirim ke engineer.
+  satu per screen. Hasilnya masuk ke **`design/exports/NN-<slug>.png`** —
+  tool ini selalu menulis ke folder `exports/` di samping entry file, bukan
+  ke `design/` langsung; jangan ditulis ulang atau "dipindahkan" manual
+  dengan menebak path. Inilah yang dikirim ke engineer.
 - **HTML builder** — format `standalone` per screen →
-  `design/NN-<slug>-ref.html`. HTML self-contained yang render-nya persis
-  seperti prototipe. Ini kontrak visual builder — struktur dan token,
-  bukan kode untuk dicopy.
+  `design/exports/NN-<slug>-ref.html` (folder yang sama, aturan yang sama).
+  HTML self-contained yang render-nya persis seperti prototipe. Ini
+  kontrak visual builder — struktur dan token, bukan kode untuk dicopy.
 - **Index** — `design/<project>-ref.html`: satu halaman sederhana yang
   me-link setiap `-ref.html` + PNG dari **semua** screen yang sudah jadi
-  (semua fitur, bukan cuma run ini). Ditulis ulang setiap run agar tetap
-  jadi peta isi — peran yang sama dengan frame `00 · Panduan` backend A.
+  (semua fitur, bukan cuma run ini). File ini ditulis langsung ke `design/`
+  oleh skill, bukan di-export — itu sebabnya path-nya berbeda dari dua
+  di atas. Ditulis ulang setiap run agar tetap jadi peta isi — peran yang
+  sama dengan frame `00 · Panduan` backend A.
 
 Backend B saat ini **tidak export PDF** (lihat tabel). Kalau engineer
 meminta satu PDF berisi semua halaman, catat sebagai permintaan tertunda
@@ -291,6 +296,8 @@ Backend-neutral. Isi minimum setiap run:
   perintah install
 - **State yang tidak digambarkan**: loading/error/empty — dari mana
   (ui-context.md default)
+- **Lokasi artifak backend B**: `design/exports/NN-<slug>.png` +
+  `design/exports/NN-<slug>-ref.html` + index `design/<project>-ref.html`.
 
 File ini adalah apa yang `/selcy-implement` baca sebagai kontrak visual,
 bersama `-ref.html`.
@@ -346,7 +353,7 @@ pertama dibangun.
    termasuk screenshot dan preflight.)
 5. Export PNG per frame + `-ref.html` (html-tailwind/html-css sesuai stack).
    (Backend B: tiga artifak di bagian Backend B — PNG per screen, `-ref.html`
-   per screen, index.)
+   per screen, index. Semua di `design/exports/` kecuali index.)
 6. Update frame `00 · Panduan` (backend A) atau index
    `design/<project>-ref.html` (backend B) agar tetap menjadi indeks yang
    akurat.
@@ -362,7 +369,8 @@ Tulis `design/NN-<nama>.md` (lihat format di atas). Update
 Kirim PNG + `.pen` + `-ref.html` ke engineer (MEDIA: paths, satu per baris).
 Backend B: PNG per screen + `NN-<slug>-ref.html` + index
 `<project>-ref.html`; **tidak ada `.pen`** dan **tidak ada PDF** — kirim PNG
-saja. Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
+saja. Path PNG dan `-ref.html` adalah `design/exports/…` (lihat bagian
+Backend B — Export), index ada di `design/`. Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
 satu path per baris, di akhir setiap run. Tanpa pesan ini, engineer tidak
 menerima apa-apa.
 Lapor: frame apa yang dibuat, keputusan inkonsistensi apa yang diambil,
