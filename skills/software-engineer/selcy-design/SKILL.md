@@ -51,7 +51,7 @@ run pertama, tanyakan ke engineer dan tulis dulu ke `ui-context.md`.
 |---|---|---|
 | Host | Linux, `pen` CLI terpasang | Windows / VS Code / opencode, MCP Open Design |
 | Bentuk karya | satu `.pen`, semua screen jadi frame di dalamnya | satu HTML per screen, semuanya dalam satu `collectionId` |
-| Untuk builder | `design/<project>-ref.html` | `.open-design/NN-<slug>/exports/NN-<slug>-ref.html` + symlink `design/NN-<slug>-ref.html` + index `design/<project>-ref.html` |
+| Untuk builder | `design/<project>-ref.html` | `.open-design/NN-<slug>/exports/NN-<slug>.html` + symlink `design/NN-<slug>-ref.html` + index `design/<project>-ref.html` |
 | Untuk manusia | PNG per frame | PNG per screen, `.open-design/NN-<slug>/exports/` + symlink di `design/` |
 | Pengganti `.pen` utuh | `.pen` itu sendiri | index `design/<project>-ref.html` |
 | PDF | — | **tertunda.** Open Design export PDF per artifact, tidak menggabungkan semua screen jadi satu PDF; sekarang pakai PNG per screen dulu |
@@ -284,9 +284,14 @@ Setelah semua screen bersih dari `check`:
   satu per screen, masuk ke `.open-design/NN-<slug>/exports/`. Inilah yang
   dikirim ke engineer.
 - **HTML builder** — format `standalone` per screen,
-  `.open-design/NN-<slug>/exports/NN-<slug>-ref.html`. HTML self-contained
-  yang render-nya persis seperti prototipe. Ini kontrak visual builder —
-  struktur dan token, bukan kode untuk dicopy.
+  `.open-design/NN-<slug>/exports/NN-<slug>.html`. **Nama file ikut entry
+  file** —Export selalu menulis `<nama-entry>.html`, tidak menambah `-ref`.
+  Karena entry file-nya sudah `NN-<slug>.html` (aturan folder di atas),
+  hasilnya `NN-<slug>.html` di `exports/`. Jangan harap
+  `NN-<slug>-ref.html`; symlink ke `design/` (lihat bawah) yang membawa
+  nama `-ref.html` tersebut. HTML self-contained yang render-nya persis
+  seperti prototipe. Ini kontrak visual builder — struktur dan token,
+  bukan kode untuk dicopy.
 - **Index** — `design/<project>-ref.html`, satu halaman sederhana yang
   me-link setiap `-ref.html` + PNG dari **semua** screen yang sudah jadi
   (semua fitur, bukan cuma run ini). Ditulis ulang setiap run agar tetap
@@ -305,12 +310,13 @@ re-export), tapi symlink:
 
 ```bash
 # Linux / macOS (Git Bash di Windows)
-ln -s ../../.open-design/NN-<slug>/exports/NN-<slug>-ref.html design/NN-<slug>-ref.html
+ln -s ../../.open-design/NN-<slug>/exports/NN-<slug>.html design/NN-<slug>-ref.html
 ln -s ../../.open-design/NN-<slug>/exports/NN-<slug>.png      design/NN-<slug>.png
 
-# Windows native (PowerShell, butuh Developer Mode atau hak admin)
-New-Item -ItemType SymbolicLink -Path "design/NN-<slug>-ref.html" `
-  -Target "..\.open-design\NN-<slug>\exports\NN-<slug>-ref.html"
+# Windows native (butuh hak symlink — cmd mklink, BUKAN PowerShell
+# New-Item yang juga butuh Developer Mode)
+cmd /c mklink "design\NN-<slug>-ref.html" "..\.open-design\NN-<slug>\exports\NN-<slug>.html"
+cmd /c mklink "design\NN-<slug>.png"      "..\.open-design\NN-<slug>\exports\NN-<slug>.png"
 ```
 
 Aturan:
@@ -319,7 +325,11 @@ Aturan:
   ditunda ke akhir run. Kalau symlink sudah ada dari run sebelumnya,
   lewati (re-export overwrites the target file, link tetap).
 - **Absolute path tidak boleh** — symlink absolute tidak portabel antar
-  mesin engineer. Selalu relative dari `design/`.
+  mesin engineer. Selalu relative dari `design/`. (Catatan: bahkan link
+  absolute tetap bisa dibaca reader, tapi anggap sebagai bug.)
+- **PowerShell `New-Item -ItemType SymbolicLink` gagal tanpa Developer
+  Mode**, bahkan kalau `cmd /c mklink` di mesin yang sama berhasil. Kalau
+  `mklink` juga gagal (akun tanpa hak symlink), masuk fallback.
 - **Fallback kalau symlink ditolak** (host tanpa Developer Mode/hak
   admin di Windows): tulis `design/NN-<slug>-ref.html` sebagai file
   asli (copy), dan catat di `design/NN-*.md` bahwa artifak itu bukan
@@ -344,7 +354,7 @@ Backend-neutral. Isi minimum setiap run:
 - **State yang tidak digambarkan**: loading/error/empty — dari mana
   (ui-context.md default)
 - **Lokasi artifak backend B**: `.open-design/NN-<slug>/exports/NN-<slug>.png`
-  + `.../NN-<slug>-ref.html` + symlink `design/NN-<slug>-ref.html` + index
+  + `.../NN-<slug>.html` + symlink `design/NN-<slug>-ref.html` + index
   `design/<project>-ref.html`.
 
 File ini adalah apa yang `/selcy-implement` baca sebagai kontrak visual,
