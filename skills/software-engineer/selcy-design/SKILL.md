@@ -51,8 +51,8 @@ run pertama, tanyakan ke engineer dan tulis dulu ke `ui-context.md`.
 |---|---|---|
 | Host | Linux, `pen` CLI terpasang | Windows / VS Code / opencode, MCP Open Design |
 | Bentuk karya | satu `.pen`, semua screen jadi frame di dalamnya | satu HTML per screen, semuanya dalam satu `collectionId` |
-| Untuk builder | `design/<project>-ref.html` | `design/NN-<slug>-ref.html` + index `design/<project>-ref.html` |
-| Untuk manusia | PNG per frame | PNG per screen |
+| Untuk builder | `design/<project>-ref.html` | `.open-design/NN-<slug>/exports/NN-<slug>-ref.html` + symlink `design/NN-<slug>-ref.html` + index `design/<project>-ref.html` |
+| Untuk manusia | PNG per frame | PNG per screen, `.open-design/NN-<slug>/exports/` + symlink di `design/` |
 | Pengganti `.pen` utuh | `.pen` itu sendiri | index `design/<project>-ref.html` |
 | PDF | — | **tertunda.** Open Design export PDF per artifact, tidak menggabungkan semua screen jadi satu PDF; sekarang pakai PNG per screen dulu |
 
@@ -213,6 +213,23 @@ Backend untuk host tanpa `pen` CLI. Semua interaksi lewat tool Open
 Design (MCP — sudah terpasang di VS Code dan opencode). Lihat tabel di
 atas untuk pemetaan artifaknya; aturan di bawah adalah urutan kerjanya.
 
+### Semua artifak hidup di `.open-design/`
+
+Open Design **hanya menampilkan artifact yang berada di dalam output
+ directory-nya** (default `.open-design/`, lihat setting
+`openDesign.outputDirectory`). Artifact yang diregister di luar folder
+itu technically valid — manifest tersimpan, preview terbuka, check dan
+export jalan — **tetapi tidak muncul di history / Recents dashboard**,
+jadi engineer tidak bisa melihat, mengaudit, atau memberi komentar pada
+layar yang sudah dibuat. Ini bukan bug; ini alur yang tidak boleh
+dilewati.
+
+Konsekuensinya: setiap screen Backend B ditulis langsung ke
+**`.open-design/NN-<slug>/NN-<slug>.html`** (entry file + manifest), dan
+export-nya ke `.open-design/NN-<slug>/exports/`. `design/` tetap
+menjadi kontrak downstream (dibaca `/selcy-implement` dan
+`/selcy-check`), yang dijaga dengan symlink — lihat bagian Export.
+
 ### Design system bridge (sekali per proyek)
 
 `ui-context.md` adalah sumber kebenaran. Sekali, saat design kickoff:
@@ -240,9 +257,12 @@ Per screen:
    `## Design Reference` + token; sertakan `collectionId`,
    `collectionName`, `screenRole` (mis. `dashboard`), dan `screenTotal`.
    Jangan pilih entry `stub: true`.
-2. Tulis HTML-nya sesuai instructions yang dikembalikan.
+2. Tulis HTML-nya sesuai instructions yang dikembalikan, langsung ke
+   `.open-design/NN-<slug>/NN-<slug>.html` (bukan `design/` — lihat aturan
+   output directory di bawah).
 3. `register_open_design_artifact` dengan `collectionId`/`collectionName`,
-   `screenIndex` (0-based), `screenRole`, kind `prototype`.
+   `screenIndex` (0-based), `screenRole`, kind `prototype`, entryPath di
+   `.open-design/NN-<slug>/NN-<slug>.html`.
 4. `check_open_design_artifact` — render + preflight (overflow, kontras,
    teks hilang, safe area). Fix setiap **error**, lihat screenshotnya
    (balance, hierarki, area terlalu penuh/kosong), maksimal dua ronde
@@ -261,24 +281,51 @@ screen mobile ikut nomornya sendiri.
 Setelah semua screen bersih dari `check`:
 
 - **PNG per screen** — `export_open_design_artifact` format `png`, scale 2,
-  satu per screen. Hasilnya masuk ke **`design/exports/NN-<slug>.png`** —
-  tool ini selalu menulis ke folder `exports/` di samping entry file, bukan
-  ke `design/` langsung; jangan ditulis ulang atau "dipindahkan" manual
-  dengan menebak path. Inilah yang dikirim ke engineer.
-- **HTML builder** — format `standalone` per screen →
-  `design/exports/NN-<slug>-ref.html` (folder yang sama, aturan yang sama).
-  HTML self-contained yang render-nya persis seperti prototipe. Ini
-  kontrak visual builder — struktur dan token, bukan kode untuk dicopy.
-- **Index** — `design/<project>-ref.html`: satu halaman sederhana yang
+  satu per screen, masuk ke `.open-design/NN-<slug>/exports/`. Inilah yang
+  dikirim ke engineer.
+- **HTML builder** — format `standalone` per screen,
+  `.open-design/NN-<slug>/exports/NN-<slug>-ref.html`. HTML self-contained
+  yang render-nya persis seperti prototipe. Ini kontrak visual builder —
+  struktur dan token, bukan kode untuk dicopy.
+- **Index** — `design/<project>-ref.html`, satu halaman sederhana yang
   me-link setiap `-ref.html` + PNG dari **semua** screen yang sudah jadi
-  (semua fitur, bukan cuma run ini). File ini ditulis langsung ke `design/`
-  oleh skill, bukan di-export — itu sebabnya path-nya berbeda dari dua
-  di atas. Ditulis ulang setiap run agar tetap jadi peta isi — peran yang
-  sama dengan frame `00 · Panduan` backend A.
+  (semua fitur, bukan cuma run ini). Ditulis ulang setiap run agar tetap
+  jadi peta isi — peran yang sama dengan frame `00 · Panduan` backend A.
 
 Backend B saat ini **tidak export PDF** (lihat tabel). Kalau engineer
 meminta satu PDF berisi semua halaman, catat sebagai permintaan tertunda
 di `design/NN-*.md` — bukan alasan memblokir run.
+
+### Symlink: jembatan ke `design/` (wajib setiap export)
+
+`/selcy-implement` dan `/selcy-check` membaca `design/` — itu kontrak
+yang tidak boleh berubah. Solusinya **bukan** menduplikasi file (dua
+copy PNG jalan terpisah dan bisa drift — copy pertama jadi basi saat
+re-export), tapi symlink:
+
+```bash
+# Linux / macOS (Git Bash di Windows)
+ln -s ../../.open-design/NN-<slug>/exports/NN-<slug>-ref.html design/NN-<slug>-ref.html
+ln -s ../../.open-design/NN-<slug>/exports/NN-<slug>.png      design/NN-<slug>.png
+
+# Windows native (PowerShell, butuh Developer Mode atau hak admin)
+New-Item -ItemType SymbolicLink -Path "design/NN-<slug>-ref.html" `
+  -Target "..\.open-design\NN-<slug>\exports\NN-<slug>-ref.html"
+```
+
+Aturan:
+
+- **Dibuat sekali, per artifact, tepat setelah export** — jangan
+  ditunda ke akhir run. Kalau symlink sudah ada dari run sebelumnya,
+  lewati (re-export overwrites the target file, link tetap).
+- **Absolute path tidak boleh** — symlink absolute tidak portabel antar
+  mesin engineer. Selalu relative dari `design/`.
+- **Fallback kalau symlink ditolak** (host tanpa Developer Mode/hak
+  admin di Windows): tulis `design/NN-<slug>-ref.html` sebagai file
+  asli (copy), dan catat di `design/NN-*.md` bahwa artifak itu bukan
+  link — supaya engineer tanda tangan drift-nya, dan `progress-tracker.md`
+  perlu diupdate saat re-export.
+- `design/NN-<slug>.md` selalu file asli, bukan symlink.
 
 ## Output: `design/NN-<nama>.md`
 
@@ -296,8 +343,9 @@ Backend-neutral. Isi minimum setiap run:
   perintah install
 - **State yang tidak digambarkan**: loading/error/empty — dari mana
   (ui-context.md default)
-- **Lokasi artifak backend B**: `design/exports/NN-<slug>.png` +
-  `design/exports/NN-<slug>-ref.html` + index `design/<project>-ref.html`.
+- **Lokasi artifak backend B**: `.open-design/NN-<slug>/exports/NN-<slug>.png`
+  + `.../NN-<slug>-ref.html` + symlink `design/NN-<slug>-ref.html` + index
+  `design/<project>-ref.html`.
 
 File ini adalah apa yang `/selcy-implement` baca sebagai kontrak visual,
 bersama `-ref.html`.
@@ -353,7 +401,8 @@ pertama dibangun.
    termasuk screenshot dan preflight.)
 5. Export PNG per frame + `-ref.html` (html-tailwind/html-css sesuai stack).
    (Backend B: tiga artifak di bagian Backend B — PNG per screen, `-ref.html`
-   per screen, index. Semua di `design/exports/` kecuali index.)
+   per screen, index. Semua di `.open-design/NN-<slug>/exports/` kecuali
+   index, lalu symlink ke `design/`.)
 6. Update frame `00 · Panduan` (backend A) atau index
    `design/<project>-ref.html` (backend B) agar tetap menjadi indeks yang
    akurat.
@@ -369,8 +418,8 @@ Tulis `design/NN-<nama>.md` (lihat format di atas). Update
 Kirim PNG + `.pen` + `-ref.html` ke engineer (MEDIA: paths, satu per baris).
 Backend B: PNG per screen + `NN-<slug>-ref.html` + index
 `<project>-ref.html`; **tidak ada `.pen`** dan **tidak ada PDF** — kirim PNG
-saja. Path PNG dan `-ref.html` adalah `design/exports/…` (lihat bagian
-Backend B — Export), index ada di `design/`. Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
+saja. Sebut path Asli di `.open-design/NN-<slug>/exports/` **dan** linknya
+di `design/` (keduanya valid; engineer bisa pakai salah satu). Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
 satu path per baris, di akhir setiap run. Tanpa pesan ini, engineer tidak
 menerima apa-apa.
 Lapor: frame apa yang dibuat, keputusan inkonsistensi apa yang diambil,
@@ -383,6 +432,10 @@ dilewati. Next step selalu: `/selcy-implement NN` di chat baru.
   B: satu `collectionId`, tidak pernah artifact lepas.)
 - Never membiarkan Open Design memakai token acak — selalu lewat design
   system yang dibangun dari `ui-context.md`.
+- Never menulis artifact Backend B di luar `.open-design/` — artifact di
+  luar folder itu tidak terlihat di dashboard / Recents, jadi engineer
+  tidak bisa mengaudit atau berkomentar. `design/` hanya diisi via symlink
+  (atau copy fallback yang dicatat), tidak pernah artifact asli.
 - Never melanjutkan saat frame kontradiktif — resolve di sini, bukan di build.
 - Never mengABAIKAN quality bar (antislop, aksesibilitas, touch target).
 - Never mengedit `ui-context.md` langsung — perubahan token adalah
@@ -396,6 +449,9 @@ dilewati. Next step selalu: `/selcy-implement NN` di chat baru.
 
 Any Agent Skills client on macOS, Linux, Windows. Backend A needs the
 `pen` CLI (Linux); backend B needs the Open Design MCP (VS Code, opencode,
-atau agent lain yang mendukung MCP). Salah satu harus ada; backend mana
-yang dipakai dicatat di `ui-context.md`. Shell snippets are POSIX
-reference, not literal scripts.
+atau agent lain yang mendukung MCP) dan menulis ke output directory Open
+Design (default `.open-design/`, bisa diatur lewat
+`openDesign.outputDirectory`). Salah satu harus ada; backend mana yang
+dipakai dicatat di `ui-context.md`. Symlink butuh Developer Mode atau hak
+admin di Windows; Git Bash `ln -s` berjalan tanpa keduanya. Shell
+snippets are POSIX reference, not literal scripts.
