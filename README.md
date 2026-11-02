@@ -41,10 +41,10 @@ One skill per phase. Run only the ones a change needs.
 | --- | --- | --- |
 | `selcy-sdd` | software-engineer | Run `/selcy-sdd` once at project start. Interviews you in structured rounds (product, stack, architecture shape, security, error handling, testing, deployment, **design first vs build directly**), then batch generates the whole spec-driven development context bundle plus numbered feature specs. Safe to resume in a new chat. `/selcy-sdd change` is the modification door: interviews a deliberate change, computes its blast radius, and writes one change spec. |
 | `selcy-audit` | software-engineer | Run `/selcy-audit` once on a codebase that already exists and has no context bundle. Reads the real code and reverse-engineers the same bundle from it, so the rest of the loop works on a project you did not start from scratch. Observes, never invents. |
-| `selcy-design` | software-engineer | Run `/selcy-design` before `/selcy-implement` for any feature whose spec carries a `## Design Reference`. Appends the feature's screens as frames in the project's single `.pen` file (never one file per page), resolves cross-frame inconsistencies before they reach the builder, exports `html-tailwind` or `html-css` plus PNG, and writes `design/NN-name.md` naming frame ids and tokens. Applies the anti-slop and ui-ux-pro-max quality bars; opens the inspiration shelf when a design decision is stuck. Pair worker with `/selcy-implement` for UI. |
+| `selcy-design` | software-engineer | Run `/selcy-design` before `/selcy-implement` for any feature whose spec carries a `## Design Reference`. Two backends, recorded once in `ui-context.md`: the pen.dev CLI (Linux), or Open Design (Windows / VS Code / opencode via MCP). Either way it appends the feature's screens to the project's single design collection, resolves cross-screen inconsistencies before they reach the builder, exports the builder's `-ref.html` plus PNG, and writes `design/NN-name.md` naming screens and tokens. Applies the anti-slop and ui-ux-pro-max quality bars; opens the inspiration shelf when a design decision is stuck. Pair worker with `/selcy-implement` for UI. |
 | `selcy-implement` | software-engineer | Run `/selcy-implement` to build one feature spec into working code. Reads the context bundle, gates on input coverage so nothing load bearing is invented mid build, builds (treating a `## Design Reference` and its exported `-ref.html` as the visual contract: token and structure, never code to copy), runs the spec's Check When Done, updates progress-tracker.md, and commits. One feature per chat. |
 | `selcy-check` | software-engineer | Run `/selcy-check` before closing a feature. `verify` runs the real app and proves the feature behaves per its spec; `review` reads the diff on a fresh model and ranks findings. Read only, never edits code. |
-| `selcy-test` | software-engineer | Run `/selcy-test` after `/selcy-implement` builds a feature. Scopes from git uncommitted changes, reads the testing standards to know what must be covered first, and picks the right strategy per file. Saves the framework choice so it never asks twice. |
+| `selcy-test` | software-engineer | Run `/selcy-test` after `/selcy-implement` builds a feature. Scopes from the feature's committed range (tag first, then the range since it went In Progress) so it still works after the builder has committed, reads the testing standards to know what must be covered first, and picks the right strategy per file. Saves the framework choice so it never asks twice. |
 | `selcy-deploy` | software-engineer | Run `/selcy-deploy` when deploying or handing off a project. Cloudflare Pages/Workers, Supabase Edge CORS, env build vs CI secrets, GPS/HTTPS context; runs preflight checks and writes docs/DEPLOY.md so the next deploy does not rediscover what this one paid for. |
 | `selcy-debug` | software-engineer | Run `/selcy-debug` when something is broken. Reproduces the bug on demand, narrows it to the smallest failing surface, fixes the root cause with the smallest change, and hands a regression test to `/selcy-test`. |
 | `selcy-grill` | software-engineer | Run `/selcy-grill` before a change whose design is still open. Interviews you across the design tree, one round at a time, until every branch is resolved, then writes the decision to the standards file that owns it. The interview primitive behind `/selcy-sdd`, usable on its own. |
@@ -56,38 +56,30 @@ One skill per phase. Run only the ones a change needs.
 
 ## Install
 
-Uses [npx skills](https://github.com/vercel-labs/skills). Pick your agent:
+Uses [npx skills](https://github.com/vercel-labs/skills).
+
+**Stable — `maulanaadib/skills`:** the settled, tested release.
 
 ```bash
-# Claude Code (installs into .claude/skills, then restart Claude Code)
-npx skills@latest add maulanaadib/skills -a claude-code
-
-# OpenCode, Codex, and other .agents/skills readers
-npx skills@latest add maulanaadib/skills -a opencode
-
-# GitHub Copilot
-npx skills@latest add maulanaadib/skills -a github-copilot
-
-# Any other supported agent, or all of them
-npx skills@latest add maulanaadib/skills -a cursor
-npx skills@latest add maulanaadib/skills --all
+npx skills@latest add maulanaadib/skills
 ```
 
-Or install from the full URL:
+**Beta — `selcy-ai/skills`:** the development repo. Newer (two design backends, prefix-aware orchestrator, serial default), but not yet proven stable — expect changes without notice. Only use this if you want the bleeding edge.
 
 ```bash
-npx skills@latest add https://github.com/maulanaadib/skills
+npx skills@latest add selcy-ai/skills
 ```
 
 List what is inside before installing:
 
 ```bash
 npx skills@latest add maulanaadib/skills --list
+npx skills@latest add selcy-ai/skills --list
 ```
 
-**One trade-off to know.** `npx skills add` copies every skill in the repo, so each agent receives all ten even if it will only use a few. The unused ones sit idle; a skill never loads unless its trigger fires. This is the cost of keeping unrelated skills in one repo instead of one repo per skill.
+**One trade-off to know.** `npx skills add` copies every skill in the repo, so each agent receives all twelve even if it will only use a few. The unused ones sit idle; a skill never loads unless its trigger fires. This is the cost of keeping unrelated skills in one repo instead of one repo per skill.
 
-The orchestrator has an extra step the other nine do not. It needs a Hermes profile and the kanban toolset, because the dispatcher is what spawns it. If you only want the spec-driven loop, install with `-a opencode` and never set up Hermes; `selcy-orchestrator` will not fire. Full walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
+The orchestrator has an extra step the other eleven do not. It needs a Hermes profile and the kanban toolset, because the dispatcher is what spawns it. If you only want the spec-driven loop, never set up Hermes; `selcy-orchestrator` will not fire. Full walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
 
 ---
 
@@ -525,7 +517,7 @@ The worker never deletes sessions. If the list has probe sessions, it names them
 
 A single feature failure stops the loop, because the next feature may be built on a broken foundation.
 
-**What it never does:** never writes application code, never edits a file under `context/`, never answers an owed decision, never batches features, never marks a feature complete, never creates a second build session for a feature that already has one, never runs the other nine skills itself, never gives a time estimate for a build (it reports state instead, which is verifiable and does not expire), and never waits on you for a push credential you already approved.
+**What it never does:** never writes application code, never edits a file under `context/`, never answers an owed decision, never batches features, never marks a feature complete, never creates a second build session for a feature that already has one, never runs the other eleven skills itself, never gives a time estimate for a build (it reports state instead, which is verifiable and does not expire), and never waits on you for a push credential you already approved.
 
 Full setup walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
 
