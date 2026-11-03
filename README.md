@@ -11,6 +11,8 @@ The loop has three doors. `/selcy-sdd` is the greenfield one: empty directory, y
 ```mermaid
 flowchart LR
     A["/selcy-sdd<br/>once at start"] --> B["/selcy-design<br/>one feature UI"]
+    A --> B2["/selcy-design-allin<br/>all features, once, upfront"]
+    B2 --> C["/selcy-implement<br/>one feature"]
     B --> C["/selcy-implement<br/>one feature"]
     H["/selcy-audit<br/>once on existing code"] --> C
     K["/selcy-sdd change<br/>one deliberate change"] --> C
@@ -30,6 +32,8 @@ flowchart LR
 ParallelCapable: features whose specs declare `Depends-On: none` (or whose
 dependencies have all landed) run concurrently — see **Scheduling** in
 `selcy-orchestrator`.
+
+Two run modes. The default is per feature: `/selcy-design NN` before `/selcy-implement NN`, one feature's UI at a time, so each mockup is drawn after the previous feature's build has fed back. The alternative is `/selcy-design-allin`: design every UI feature's screens in one pass, before any build, and review the whole surface once. The alternative trades staleness for overview — it fits a product whose data model is already stable.
 
 Read it as a contract: `/selcy-sdd` or `/selcy-audit` runs **once** and writes the spec bundle. `/selcy-sdd change` runs **once per deliberate change** and writes one change spec. Everything after that runs **per feature**, in its own new chat. `/selcy-debug`, `/selcy-debt`, and `/selcy-grill` run anytime, out of band. `/selcy-orchestrator` replaces the human in the per-feature loop, once, after you approve the plan.
 
@@ -51,6 +55,7 @@ One skill per phase. Run only the ones a change needs.
 | `selcy-debt` | software-engineer | Run `/selcy-debt` when you find a bug that is not yours, or learn a gotcha the next chat needs. Records pre-existing bugs with the feature that owns them and per-module gotchas in `context/debt.md`, so the current chat stays clean and the finding has a home. Never fixes anything. |
 | `selcy-sync` | software-engineer | Run `/selcy-sync` after you edit a context file by hand, or after a feature lands. Reconciles progress-tracker.md against the repo, detects a context file that drifted from the feature specs, and flags specs the change made stale. |
 | `selcy-orchestrator` | orchestrator | Run `/selcy-orchestrator` after `/selcy-sdd` and you approve the plan. Reads progress-tracker.md, delegates one feature at a time to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review session and an independent test session, verifies against the spec's Check When Done, and advances. Unattended, stops only on an owed decision or a failed gate. |
+| `selcy-design-allin` | orchestrator | Run `/selcy-design-allin` once, after `/selcy-sdd` and before the first `/selcy-implement`, to design every UI feature's screens in one pass instead of one `/selcy-design NN` per feature. Reads the specs, filters those carrying a `## Design Reference`, runs the same per-feature design loop sequentially in one chat, and hands the engineer a single review of all screens before any build starts. `/selcy-design NN` stays the default inside the loop; this is the upfront alternative for products whose data model is already stable. |
 
 ---
 
@@ -64,7 +69,7 @@ Uses [npx skills](https://github.com/vercel-labs/skills).
 npx skills@latest add maulanaadib/skills
 ```
 
-**Beta — `selcy-ai/skills`:** the development repo. Newer (three design backends, prefix-aware orchestrator, serial default), but not yet proven stable — expect changes without notice. Only use this if you want the bleeding edge.
+**Beta — `selcy-ai/skills`:** the development repo. Newer (three design backends plus the all-in design pass, prefix-aware orchestrator, serial default), but not yet proven stable — expect changes without notice. Only use this if you want the bleeding edge.
 
 ```bash
 npx skills@latest add selcy-ai/skills
@@ -77,9 +82,9 @@ npx skills@latest add maulanaadib/skills --list
 npx skills@latest add selcy-ai/skills --list
 ```
 
-**One trade-off to know.** `npx skills add` copies every skill in the repo, so each agent receives all twelve even if it will only use a few. The unused ones sit idle; a skill never loads unless its trigger fires. This is the cost of keeping unrelated skills in one repo instead of one repo per skill.
+**One trade-off to know.** `npx skills add` copies every skill in the repo, so each agent receives all thirteen even if it will only use a few. The unused ones sit idle; a skill never loads unless its trigger fires. This is the cost of keeping unrelated skills in one repo instead of one repo per skill.
 
-The orchestrator has an extra step the other eleven do not. It needs a Hermes profile and the kanban toolset, because the dispatcher is what spawns it. If you only want the spec-driven loop, never set up Hermes; `selcy-orchestrator` will not fire. Full walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
+The two orchestrator skills have an extra step the others do not. It needs a Hermes profile and the kanban toolset, because the dispatcher is what spawns it. If you only want the spec-driven loop, never set up Hermes; `selcy-orchestrator` will not fire. Full walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
 
 ---
 
@@ -517,7 +522,7 @@ The worker never deletes sessions. If the list has probe sessions, it names them
 
 A single feature failure stops the loop, because the next feature may be built on a broken foundation.
 
-**What it never does:** never writes application code, never edits a file under `context/`, never answers an owed decision, never batches features, never marks a feature complete, never creates a second build session for a feature that already has one, never runs the other eleven skills itself, never gives a time estimate for a build (it reports state instead, which is verifiable and does not expire), and never waits on you for a push credential you already approved.
+**What it never does:** never writes application code, never edits a file under `context/`, never answers an owed decision, never batches features, never marks a feature complete, never creates a second build session for a feature that already has one, never runs the other skills itself, never gives a time estimate for a build (it reports state instead, which is verifiable and does not expire), and never waits on you for a push credential you already approved.
 
 Full setup walkthrough: **[docs/orchestrator-runbook.md](docs/orchestrator-runbook.md)**.
 

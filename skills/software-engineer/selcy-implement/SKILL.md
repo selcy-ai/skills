@@ -94,16 +94,33 @@ from taste.
 
 **`-ref.html` is a contract, not code to copy.** The exported HTML carries
 the DOM structure and the exact tokens (colors, fonts, spacing, radii) the
-mockup used. It also carries things that are artifacts of headless export and
-must **never** reach production code:
+mockup used. It also carries things that are artifacts of the export tool
+and must **never** reach production code — but **which artifacts depends on
+the design backend**, so check rather than assuming:
 
-- the Tailwind CDN script tag,
-- arbitrary-value classes from the export (`w-[1360px]`, `text-[14px]/[20px]`,
-  `font-['Work_Sans']` as literal class strings),
-- the fixed `1360px` container width and any headless scaffold boilerplate.
+- **Backend A (pen.dev)** exports Tailwind with a CDN script tag,
+  arbitrary-value classes (`w-[1360px]`, `text-[14px]/[20px]`,
+  `font-['Work_Sans']` as literal class strings), and a fixed `1360px`
+  container. All of those are export scaffolding: discard them.
+- **Backend B/C (Open Design)** export plain self-contained CSS, often
+  already responsive (`@media`) and token-based (`--primary` etc.). The
+  Tailwind CDN, arbitrary-value classes, and fixed 1360px **are typically
+  absent** — do not "discard" what is not there, and do not treat the
+  cleaner export as a mistake. The `design backend:` line in
+  `ui-context.md` tells you which one you are reading.
+
+What every backend's export shares, and what you must always replace,
+because no design tool can know it:
+
+- **Dummy links** (`href="#"`) → the project's real routing.
+- **Hardcoded sample data** (`#ORD-7841`, names, numbers) → the API,
+  database, or state the spec names.
+- **No data fetching at all** → the real calls, loading, error, and empty
+  states. A prototype has no `fetch`, no handler, no validation, no auth —
+  all of that is yours to write from the spec.
 
 Treat it as the source of truth for **structure and token values**; convert
-fixed pixel layout into fluid layout (flex/grid + Tailwind's standard
+fixed pixel layout into fluid layout (flex/grid + the project's standard
 breakpoints) while keeping the token values and the DOM order. When a
 `-ref.html` exists, your handoff must include a compliance note: what
 followed the mockup, what deviated, and the reason for each deviation
