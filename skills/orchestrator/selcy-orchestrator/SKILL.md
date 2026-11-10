@@ -44,7 +44,9 @@ It exists because the selcy loop is deliberately one feature per chat, and a hum
 
 ## The session contract
 
-Every `opencode run` creates a session, and those sessions are how the engineer reviews what happened. Left unmanaged, one feature ends up as `feat-04`, `feat-04-r1`, `feat-04-r2` running side by side, and the engineer cannot tell which one is real. Three rules prevent that:
+Every `opencode run` creates a session, and those sessions are how the engineer reviews what happened. Left unmanaged, one feature ends up as `feat-04`, `feat-04-r1`, `feat-04-r2` running side by side, and the engineer cannot tell which one is real. Four rules prevent that:
+
+**The session prefix comes from the project directory.** Every session this worker creates carries the project's own prefix, derived once per project from the directory name (`/root/workspaces/agent-build/ambar` → `ambar`, `…/bmkg` → `bmkg`), then recorded in `context/progress-tracker.md` and the first card so every tick and every wave reuses it. `feat-<NN>-<slug>` below means `<prefix>-<NN>-<slug>` — `ambar-04-order-input-manual`, `bmkg-08-test`. A project may adopt any prefix it wants (`bmkg-cp<NN>` ran for months and was fine); what is forbidden is two prefixes in one project, because then the drift check cannot recognize its own sessions and the engineer cannot grep the list. Skill prefixes in this document are written as `feat-` for readability; substitute the project's recorded prefix.
 
 | Kind of work | Session | Why |
 | --- | --- | --- |
@@ -63,6 +65,7 @@ So the worker treats its own turn as stateless and writes everything the next ti
 
 - **The build session id** → a card comment and the card metadata, written before the run finishes, not after.
 - **The skill prefix the build harness loads** (`@` or `/`) → a card comment, the card metadata, and `context/progress-tracker.md`, detected once per project and reused on every delegation after that. Without this, every tick re-derives or guesses how to load a skill, and a wrong prefix silently turns the delegation into a hand-rolled prompt.
+- **The session prefix** (derived from the project directory name: `ambar`, `bmkg`) → a card comment, the card metadata, and `context/progress-tracker.md`, derived once per project and reused for every session title after that. Without it, drift checks cannot recognize their own sessions and the engineer cannot grep the session list by project.
 - **The review and test model choices** → a card comment, asked once and reused.
 - **The block reason and the resume command** → the card, and also the reply to the engineer.
 - **Feature progress** → `context/progress-tracker.md`, which is the file B0 reads first for exactly this reason.
@@ -185,7 +188,7 @@ The comment thread is also where this card's own history lives. Before delegatin
 
 This is the difference between one session per feature and three. If you skip this check, a worker that crashed mid-build spawns a sibling session, the engineer sees two sessions for one feature, and neither holds the full picture.
 
-**Drift check: the card is not the only place a session id can hide.** Before creating any session, list the project's opencode sessions and look for one whose title carries this feature's prefix (`feat-<NN>-` or the project's own prefix, e.g. `bmkg-cp<NN>`).
+**Drift check: the card is not the only place a session id can hide.** Before creating any session, list the project's opencode sessions (`opencode session list --format json`, in the project directory) and look for one whose title carries this feature's prefix — `<project-prefix>-<NN>` using the project's recorded prefix (`ambar-04…`, `bmkg-cp08…`), never a guessed prefix.
 
 - **One exists, the card has no id** → adopt it as the build session and write it into the card. Do not create a new one.
 - **Several exist** → a past tick already violated the one-session rule. Adopt the most recent as the build session, and **name the duplicates in the report** so the engineer can see what was forked and when. Never delete them.
@@ -471,13 +474,15 @@ If the failure came from review or test, name those sessions in the block reason
 
 ## Session hygiene
 
-The session list is the engineer's audit trail, and it becomes useless when it is full of noise. The worker keeps it readable by following four rules, none of which involve deleting anything quietly:
+The session list is the engineer's audit trail, and it becomes useless when it is full of noise. The worker keeps it readable by following five rules:
 
-- **Name every session you create.** `--title "feat-<NN>-<slug>"`, `-review`, `-test`. A session with an auto-generated title is invisible in the list, and invisible sessions are what the engineer ends up cleaning up by hand.
+- **Title every `opencode run`, with no exceptions.** Every session this worker spawns — build, resume, review, test, verify, debug fix, *and any probe or smoke test* — gets `--title`. A session created without `--title` lands in the list as `(no title)`, and a project that accumulates them (invoice-me reached 54) becomes ungrepable and unsearchable. Probes are not exempt: a probe worth running is worth naming — `<prefix>-probe-<what>` — and a probe not worth naming is a probe not worth spawning. If a command cannot carry `--title` for some reason, that is a signal to stop and ask, not to proceed titleless.
 
 - **One build session per feature.** This is the rule that failed when a worker crashed mid-build and spawned a sibling. The session id lives in the card, so a resumed run is always possible; there is no situation that justifies a new build session for a feature that already has one. **Check the session list, not just the card** — a session created by a previous tick that never got recorded in the card is still the build session; adopt it. Naming variants that betrayed this rule in past runs: `-build2` … `-build6`, `-r1` … `-r8`, `-v4-r2`. Same feature, many sessions, none of them resumable by the next tick because none was recorded.
 
-- **Never delete a session you did not create, and never delete a session silently.** If the project has probe sessions (`QWEN_OK`, `MIMO_OK`, smoke tests, empty sessions), name them in the report and let the engineer decide. Deleting them yourself removes the evidence that a probe ran at all, and the engineer who asked for the cleanup cannot tell what was removed.
+- **Cleanup is conservative, always.** When a feature completes and the worker closes the card, it looks at the sessions that feature produced. Build, review, test, and verify sessions stay — they are the evidence trail, and the engineer may re-read them weeks later. Sessions that are provably empty or no-title *and* belong to a completed feature are candidates: the worker **lists them in the report and asks before deleting**, with the exact `opencode session delete <id>` commands pre-written so the engineer needs only to say yes. It never deletes silently, never deletes a session it did not create, and never deletes across a feature that is still In Progress. Evidence beats tidiness: a noisy list the engineer can clean is better than a clean list the engineer cannot audit.
+
+- **Never delete a session you did not create.** If the project has probe sessions (`QWEN_OK`, `MIMO_OK`, smoke tests, empty sessions) the worker did not spawn, name them in the report and let the engineer decide. Deleting them removes the evidence that a probe ran at all, and the engineer who asked for the cleanup cannot tell what was removed.
 
 - **Report the session list when it is noisy.** When a feature finishes and the project has more sessions than features, say so in the card, with the names. Cleanup is the engineer's call; noticing is the worker's.
 
