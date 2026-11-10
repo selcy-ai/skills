@@ -1,7 +1,7 @@
 ---
 name: selcy-orchestrator
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Agent
-description: "Turns an approved @selcy-sdd spec bundle into a kanban board of feature cards, then works them one at a time as the dispatcher spawns it. Each card delegates one feature to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review session and an independent test session, verifies against the spec's Check When Done, and completes or blocks. Fully autonomous once the bundle is approved — the board is the trigger."
+description: "Turns an approved @selcy-sdd spec bundle into a kanban board of feature cards, then works them as the dispatcher spawns it. Each card delegates one feature to `opencode run`, resumes that same session if the build is interrupted instead of starting a new one, runs an independent review (one per wave when features build in parallel) and an independent test suite per feature, fixes bugs the written contract already defines — up to two rounds, then blocks — and escalates only what the bundle is silent on. Fully autonomous once the bundle is approved — the board is the trigger, the contract is the boundary."
 ---
 
 ## Contents
@@ -20,6 +20,7 @@ description: "Turns an approved @selcy-sdd spec bundle into a kanban board of fe
   - [B0. Read the card](#b0-read-the-card)
   - [B1. Delegate one feature](#b1-delegate-one-feature)
   - [B2. Read the result](#b2-read-the-result)
+  - [B2b. The fix loop, when the failure is a bug](#b2b-the-fix-loop-when-the-failure-is-a-bug)
   - [B3. Review and test, in separate sessions](#b3-review-and-test-in-separate-sessions)
   - [B4. Block and report](#b4-block-and-report-and-hand-the-fix-back-to-the-build-session)
 - [What this skill never does](#what-this-skill-never-does)
@@ -30,7 +31,7 @@ description: "Turns an approved @selcy-sdd spec bundle into a kanban board of fe
 - [Scheduling: the dependency graph, waves, and parallel execution](#scheduling-the-dependency-graph-waves-and-parallel-execution)
   - [What an edge means](#what-an-edge-means)
   - [Waves](#waves)
-  - [Concurrency limit](#concurrency-limit-1-default-serial-more-only-if-the-engineer-says-so)
+  - [Concurrency limit](#concurrency-limit-2-default-more-only-if-the-engineer-says-so)
   - [Fan-out and fan-in](#fan-out-and-fan-in)
 
 ## What this skill does
@@ -48,8 +49,9 @@ Every `opencode run` creates a session, and those sessions are how the engineer 
 | Kind of work | Session | Why |
 | --- | --- | --- |
 | **Build** | `feat-<NN>-<slug>`, **resumed** if interrupted | A build accumulates context. Throwing it away after a crash means re-reading the whole bundle and re-doing the reasoning. |
-| **Review** | `feat-<NN>-<slug>-review`, always new | A reviewer that inherits the builder's session inherits its rationalization. Fresh session, code on disk versus the spec. |
+| **Review** | `feat-<NN>-<slug>-review` (serial wave) or `feat-w<N>-review` (wave with siblings), always new | A reviewer that inherits the builder's session inherits its rationalization. Fresh session, code on disk versus the spec. |
 | **Test** | `feat-<NN>-<slug>-test`, always new | A tester that inherits the builder's session writes tests for what the builder already thought of, not the edge cases it missed. |
+| **Verify** | `feat-<NN>-<slug>-verify`, on-demand only, never a stage | `@selcy-check verify` writes nothing — its proof is the session transcript. The session id in the card is the only place that proof is findable, so record it when you spawn one. |
 
 The worker never lets one feature accumulate build sessions. A new build session is created **once**, on the first delegation; every interruption after that resumes it. The session id is the card's memory across dispatcher ticks, which is the only reason a resume is possible at all.
 
@@ -93,7 +95,7 @@ When `context/` is missing or empty at Phase A0, do not stop and do not name the
 
 ## The thirteen skills, and what this orchestrator does with each
 
-The suite has thirteen skills and this orchestrator has exactly three relationships to them. Knowing which is which is the whole routing problem, because getting it backwards is the failure mode: delegating a skill that should only be named means the worker makes a decision that belongs to the engineer, and naming a skill that should be delegated means the worker hand-rolls a worse version of it.
+The suite has thirteen skills and this orchestrator has exactly two relationships to them. Knowing which is which is the whole routing problem, because getting it backwards is the failure mode: delegating a skill that should only be named means the worker makes a decision that belongs to the engineer, and naming a skill that should be delegated means the worker parks the run overnight for a fix the contract already authorized.
 
 | Skill | Relationship | Why
 | --- | --- | --- |
@@ -103,15 +105,19 @@ The suite has thirteen skills and this orchestrator has exactly three relationsh
 | `@selcy-design` | **Delegates to it, when the spec says so.** | A spec carrying a `## Design Reference` gets its design built before its builder: the design session appends the feature's screens to the project's single design collection, exports `-ref.html` and PNG for each, and writes `design/NN-*.md`. On API-only and single-screen products the spec carries no `## Design Reference`, so design is never invoked — it is not a stage every feature gets. **Skipped without running when the feature already has a `design/NN-*.md` and a tracker line saying designed** — that is the `@selcy-design-allin` case, and re-designing an already-designed feature wastes the batch. |
 | `@selcy-design-allin` | **Names it — the engineer's upfront alternative.** | Designs every UI feature's screens in one pass, before any build, so the engineer reviews the whole surface at once instead of per feature. It is a deliberate trade against the per-feature loop (screens reflect the spec, not built behavior), so the engineer chooses it — it is never imposed. When the engineer has run it, the per-feature `@selcy-design` delegations above are skipped for the features it covered. |
 | `@selcy-implement` | **Delegates to it.** The build session runs `@selcy-implement <NN>`, which resolves the feature, runs the input coverage gate, builds, runs Check When Done, updates the tracker, and commits. |
-| `@selcy-check` | **Delegates to it.** | The review stage runs `@selcy-check review`; `verify` is delegated when the desk check leaves an item unproven. |
+| `@selcy-check` | **Delegates to it.** | The review stage runs `@selcy-check review`; `verify` is delegated when the desk check leaves an item unproven — it is on demand, never a default stage, because it costs a real app boot. |
 | `@selcy-test` | **Delegates to it.** | The test stage runs `@selcy-test <NN>` in its own session. It used to be the one exception — it scoped from uncommitted changes, but the builder already committed — so the skill now scopes from the feature's tag/committed range when the tree is clean (see B3b). |
-| `@selcy-debug` | **Never runs it. Names it.** | When a failure is a bug rather than an owed decision, the engineer's fix tool is this, in the build session. |
+| `@selcy-debug` | **Delegates to it, when the failure is a bug.** | A bug is a disagreement between the code and a contract that is already written down — the spec, a standards file, the data model. Correct is already defined, so the work is execution, not decision: the worker resumes the build session on `@selcy-debug`, gets the fix, and reports what happened. The soft cap is two fix rounds per feature; the third failure blocks (B4). When the failure is *not* a bug but a question the bundle cannot answer, this skill stays named and the worker blocks — `@selcy-debug` cannot fix a missing decision. |
 | `@selcy-grill` | **Never runs it. Names it.** | When the block is an owed decision, this is how the engineer settles it properly instead of answering under pressure. |
-| `@selcy-debt` | **Never runs it. Names it.** | When the builder surfaced a pre-existing bug in a surface this feature did not build. |
-| `@selcy-sync` | **Never runs it. Names it.** | After the engineer edits a standards file, and after a change lands, to catch the specs it made stale. |
+| `@selcy-debt` | **Delegates to it — record only.** | When the builder surfaced a pre-existing bug in a surface this feature did not build. Writing the finding to `context/debt.md` with an owner and evidence is clerical work with no decision in it, and the skill never fixes anything by contract. The worker runs it, then keeps the feature moving; it blocks only when the finding lands inside this feature's own critical path. |
+| `@selcy-sync` | **Delegates to it, after each wave lands.** | Reconciles the tracker and detects drift between standards files and the specs that inherit them. Read-and-report work: it never rewrites a spec, so there is no decision to steal. When it *reports* stale specs, regenerating them is `@selcy-sdd`'s job and may surface an owed decision — so the worker reports the stale list to the engineer and names `@selcy-sdd specs`. |
 | `@selcy-deploy` | **Never runs it. Names it.** | Deploy/handoff time. It runs preflight checks and writes the runbook; the orchestrator names it when the tracker says every feature is done and a deploy or handoff is next. |
 
-**The rule behind the table:** the orchestrator delegates the four skills that do work inside a build (design when the spec carries a `## Design Reference`, implement, check, test) and only names the nine that decide, record, or maintain contracts — `@selcy-design-allin` among them, because batching the design phase is the engineer's call, not the loop's. A worker that runs `@selcy-grill` itself is a worker answering an owed decision on the engineer's behalf, which the never-does list forbids; a worker that hand-rolls `@selcy-check review` is a worker that drops the severity ranking and the standards-file-is-contract rule that make the review worth spawning.
+**The rule behind the table:** the orchestrator delegates the skills that execute work — design when the spec carries a `## Design Reference`, implement, check, test, debug when the failure is a bug, debt's record pass, sync's drift pass after each wave — and names the ones that decide or rewrite contracts: `@selcy-sdd`, `@selcy-audit`, `@selcy-sdd change`, `@selcy-grill`, `@selcy-design-allin`. Get this backwards and the loop breaks in opposite directions: a worker that runs `@selcy-grill` answers an owed decision on the engineer's behalf, and a worker that names `@selcy-debug` when a red test has a spec-defined fix parks the whole run overnight for a decision the engineer already made when they wrote the standards.
+
+**The one line that decides which side a failure falls on: does the contract already say what correct is?** If yes — the spec names the behavior, the standards file names the rule, the data model names the field — the failure is execution work and the worker delegates the fix. If no, the failure is an owed decision and the worker blocks. Not existing status quo prejudice, not a guess about what the engineer would prefer: the written contract is the test.
+
+**This skill is not a procedural skill, and reading it like one is the mistake.** The other twelve are procedures: strict steps, strict gates, run them the same way every time. Strictness is what makes them safe unattended inside a build. This skill is the manager layer above them, and a manager's job is judgment — when to delegate, when to fix, when to escalate. A human engineering manager does not wake the VP because a test is red for a reason the spec already names, and does not silently change the auth model because the builder asked. So: **this worker may execute against any contract that is already written down, and may not author one.** The five named-only skills (`@selcy-sdd`, `@selcy-audit`, `@selcy-sdd change`, `@selcy-grill`, `@selcy-design-allin`) are exactly the ones that create or rewrite contract — the owner's domain, every time. Everything else is a tool the worker picks as the situation requires, bounded by that one line, not by a fixed table of "these seven, only ever these seven."
 
 ## Phase A: Bootstrap the board
 
@@ -174,10 +180,18 @@ Call ``kanban_show()``, the tool the dispatcher grants you. It returns the card 
 
 The comment thread is also where this card's own history lives. Before delegating anything, look for a **session id** in the thread or metadata. Its presence or absence decides B1:
 
-- **No session id yet** → this is the first attempt on this feature. Create a new build session (B1a).
+- **No session id yet** → this is the first attempt on this feature. Create a new build session (B1a) — but run the drift check below first.
 - **A session id is present** → this feature was delegated before and the run ended without completing. **Resume that session** (B1b). Never start a new one.
 
 This is the difference between one session per feature and three. If you skip this check, a worker that crashed mid-build spawns a sibling session, the engineer sees two sessions for one feature, and neither holds the full picture.
+
+**Drift check: the card is not the only place a session id can hide.** Before creating any session, list the project's opencode sessions and look for one whose title carries this feature's prefix (`feat-<NN>-` or the project's own prefix, e.g. `bmkg-cp<NN>`).
+
+- **One exists, the card has no id** → adopt it as the build session and write it into the card. Do not create a new one.
+- **Several exist** → a past tick already violated the one-session rule. Adopt the most recent as the build session, and **name the duplicates in the report** so the engineer can see what was forked and when. Never delete them.
+- **None exist** → first attempt. Proceed with B1a.
+
+The rule this enforces: **a build that errored is resumed with `--session`, never restarted as `<slug>-build2`, `-r1`, or `-v2`.** Restarting throws away the reasoning the previous session already paid for: BMKG accumulated six sessions for one checkpoint (`bmkg-cp14-build` through `-build6`) this way, and each restart re-read the bundle and re-derived the plan the previous session already held. A resume is cheaper than a restart and richer than a blank slate, which is why the skill treats a second build session as a violation, not a fallback.
 
 ### B1. Delegate one feature
 
@@ -246,16 +260,32 @@ Rules that make this safe:
 - **Use the recorded prefix.** The one permitted variation is the single-character prefix settled once per project by the detection rule above (`@` or `/`). Everything else — the skill name, the feature number, the absence of extra prose — is fixed.
 - **One feature per run.** Never two. A failure must stay contained to one feature.
 - **`--dir` pins the working directory.** The worker may be running from elsewhere; the build must happen in the project directory.
-- **Heartbeat while you wait.** `opencode run` is synchronous and can take many minutes. Call `kanban_heartbeat(note="delegated <NN> to opencode run, waiting")` while it runs, at least once an hour. Without a heartbeat the dispatcher may reclaim the card mid-build and you lose the run.
+- **Heartbeat while you wait.** `opencode run` is synchronous and can take many minutes. Call `kanban_heartbeat(note="delegated <NN> to opencode run, waiting")` while it runs, at least once an hour. Without it the dispatcher may reclaim the card mid-build and you lose the run.
 - **Wait for it, and be the one that sees it exit.** Do not background it, do not time it out and move on. The wait is allowed to block the turn — that is the correct behavior, not a problem to optimize. A simple blocking wait is fine; the alternative, ending the turn while the run is still in flight, is how a build finishes and nobody notices. The heartbeat is what keeps your claim on the card alive across that wait; without it the dispatcher reclaims the card and the run's exit code lands in a turn that no longer exists.
-- **Never fork a sibling session for the same feature.** If the card names a session, that session is the build. A crash is a reason to resume, not a reason to start over.
+- **Never fork a sibling session for the same feature.** If the card names a session, that session is the build. A crash is a reason to resume, not a reason to start over. This includes the retry-shaped case: the run exited non-zero, the worker decides to "try again" from scratch, and a second session appears alongside the first. **A non-zero exit is a `--session` resume, or a block — never a fresh `--title`.** A second build session for one feature is a violation even when the first one failed, because a failed session still holds the partial plan and the bundle reading the next attempt would otherwise redo.
 
 ### B2. Read the result
 
 `opencode run` exits zero or non-zero. Both are information:
 
 - **Exit zero** → the builder believes it finished. That is a claim, not proof. Go to B3.
-- **Exit non-zero** → the build failed, or the builder stopped on a question it could not answer. Read the output. Go to B4.
+- **Exit non-zero** → the build failed, or the builder stopped on a question it could not answer. Read the output and sort it (B4's two-kind table): **bug** → the worker resumes the build session on `@selcy-debug` and fixes it, up to two rounds; **owed decision** → block. Either way, report what happened in the reply, not only in the card.
+
+### B2b. The fix loop, when the failure is a bug
+
+When the failure is a bug — the spec, a standards file, or the data model already says what correct is, and the code disagrees — the worker does not block. It resumes the build session on the debug skill:
+
+```bash
+opencode run --dir <project-dir> --session <build-session-id> --auto "@selcy-debug"
+```
+
+Same session, same prefix, same one-feature rule as B1. `@selcy-debug` reproduces the bug, narrows it to the smallest failing surface, fixes the root cause with the smallest change, and hands a regression test to `@selcy-test` — that is its contract, and the worker delegates to it rather than hand-rolling a fix prompt for the same reason B1 delegates rather than hand-rolling a build prompt.
+
+**Rounds, and what stops them.** Up to two fix rounds per feature; the third failure blocks (B4). Each round: resume → fix → re-run the check that caught it (`@selcy-check review`, `@selcy-test`, or the spec's `Check When Done`) → report. The cap exists because a third failure is rarely still a bug — at that depth the likely cause is a contract gap or a spec flaw, which is the engineer's call, and a worker that retries forever reports nothing.
+
+**What the worker never does inside this loop:** never edits `context/` (a wrong spec is a human decision), never answers an owed decision (if `@selcy-debug` surfaces one, the loop stops and B4 takes over), never runs the fix in a session other than the build session, and never reports green without re-running the check that went red.
+
+**The report is the audit trail.** After every round, tell the engineer in the reply: what broke, which contract named correct, what the fix changed, and what re-ran green. A fix the worker made is not a decision it made — the contract decided, the worker executed, the report keeps the engineer informed. When the failure was an owed decision instead, nothing was fixed and the card is blocked.
 
 ### B3. Review and test, in separate sessions
 
@@ -280,6 +310,40 @@ The `--model` you pass is the session's model. `@selcy-check review` may spawn i
 The reviewer **never edits code**. It reads the spec, reads the code on disk, and reports. This is separation of duties: the reviewer's job is to notice, the builder's job is to fix. A reviewer that fixes loses the independent perspective that made it worth spawning, and the builder never learns what it missed.
 
 Record the review session id in the card the same way as the build session.
+
+**Per-wave batching, when the wave had siblings.** When this feature was part of
+a wave with other features that built at the same time, the review does not run
+per feature. Instead, after the wave's builds and per-feature test sessions have
+all drained, the worker spawns **one** review session for the whole wave, with
+`@selcy-check review` invoked once per feature inside it:
+
+```bash
+opencode run --dir <project-dir> --title "feat-w<N>-review" --model <review-model> --auto \
+  "@selcy-check review 01" "@selcy-check review 02" ...
+```
+
+One session, one independent reviewer, several review passes — each pass
+resolves one feature, reads its own diff, and writes its own
+`context/.reviews/<NN>.md`. The skill's contract is untouched: it takes one
+feature per invocation, and the batching never asks it to do otherwise. Record
+the wave-review session id **in every card of the wave**, not just one, so each
+feature's handoff names the session that reviewed it.
+
+Nothing else about the contract changes: different model than the builders,
+read-only, no code edits, rank findings, `.reviews/` files. The batching is the
+only difference, and it exists because siblings in one wave are independent by
+definition — they share no module, migration, or config file, or the overlap
+rule would have serialized them — so reviewing them in one session does not
+entangle domains that were separate. The reason is cost, and it is not small:
+across the projects run by this orchestrator, review sessions ran 87 of 322
+opencode sessions and still carried under a fifth of the tokens the builds did —
+per-feature sessions were being spawned and reading the same context repeatedly
+when the wave's siblings could share one.
+
+**Serial waves stay per-feature.** When the wave had exactly one feature
+(concurrency 1, or the wave genuinely has a single ready feature), run B3a as
+the single-feature form above. A wave of one is not batched, because there is
+nothing to batch with.
 
 #### B3b. Test — new session, different model, running `@selcy-test`
 
@@ -343,7 +407,16 @@ If an item was skipped, the reviewer found a blocking issue, a test is red, or t
 
 ### B4. Block and report, and hand the fix back to the build session
 
-The worker never retries a failed build blindly, never answers an owed decision, and never edits the spec to make a failure go away. It blocks the card:
+The worker never retries a failed build blindly, never answers an owed decision, and never edits the spec to make a failure go away. First it sorts the failure into the two kinds, because they diverge:
+
+| Kind | Test | Who acts |
+| --- | --- | --- |
+| **Bug** — the contract already says what correct is | The spec names the behavior, a standards file names the rule, the data model names the field. The failure disagrees with something written. | **The worker fixes it.** Resume the build session on `@selcy-debug` (below), re-run the affected check, keep going. |
+| **Owed decision** — the bundle is silent | No file names the answer. The builder asked and nothing in the contract can settle it. | **The engineer answers it.** Block, surface the question verbatim, never pick the recommended option on their behalf. |
+
+**The soft cap: two fix rounds per feature.** The first failure is normal — a build that never fails is a build nobody tested. The second is still plausible: a fix can itself reveal a second layer. The third is a pattern. When a feature fails three times to reach green, the loop stops guessing and blocks, because at that point the most likely explanation is no longer a bug but a contract gap or a flawed spec — a human decision, not another retry. Each round is cheap; the pattern is what the engineer needs to see, and a worker that retries forever is a worker that never reports the pattern.
+
+Then call `kanban_block(reason="...")` with:
 
 - **The feature** that stopped.
 - **Why**, in one of four kinds:
@@ -369,15 +442,15 @@ Then call `kanban_block(reason="...")` with the above. Do not delegate the next 
 | Block kind | The skill that resolves it |
 | --- | --- |
 | **Owed decision** | `@selcy-grill`, then `@selcy-sync` — settle the decision, write it to the standards file, and catch the specs it made stale. Answering the question in chat alone loses the answer by the next chat. |
-| **Failed** | `@selcy-debug`, in the build session — when the error is a bug, not a missing decision. |
-| **Gate mismatch** | `@selcy-sdd specs <feature>` — when the checklist item is genuinely missing, or the spec itself is wrong. |
-| **Review or test failure** | The fix goes to the build session; if the finding is a standards violation, `@selcy-implement`; if the standards file itself is wrong, `@selcy-grill` then `@selcy-sync`. |
+| **Failed** | `@selcy-debug`, in the build session — when the error is a bug, not a missing decision. When it is a missing decision, `@selcy-grill` instead. |
+| **Gate mismatch** | `@selcy-sdd specs <feature>` — when the spec is wrong or genuinely missing an item. |
+| **Review or test failure** | The fix goes to the build session on `@selcy-debug`; if the finding is a standards violation, `@selcy-implement`; if the standards file itself is wrong, `@selcy-grill` then `@selcy-sync`. |
 
 Say the skill by name in the block reason, with the one reason it applies. Do not explain the whole suite — the engineer needs the next step, not a manual.
 
 **Then tell the engineer, in the reply, not only in the card.** A blocked card is a request for a human decision, and the engineer is not watching the board. State the feature, the kind of block, the question or error verbatim, and the exact command to resume. A block reason written only to the card is a block the engineer finds hours later, if at all — and the question the builder asked goes unanswered while the whole run waits.
 
-When the engineer unblocks, the fix goes back to the **build session**, not a new one. The card already names it, so B0 finds it and B1b resumes it, and the builder picks up the failure with its own implementation context intact. That is the loop: review and test find it, the build session fixes it, review and test look again.
+When the failure was a bug and the worker fixed it, the report stands in for the question — the engineer hears what broke, what the contract said, what the fix changed, and what re-ran green. A fix the worker made is not a decision it made: the contract decided, the worker executed, the report keeps you informed. When the failure was an owed decision, the card stays blocked and nothing was fixed.
 
 If the failure came from review or test, name those sessions in the block reason. The engineer may want to read the reviewer's reasoning before deciding, and that reasoning is only findable if the session id is in the card.
 
@@ -387,10 +460,10 @@ If the failure came from review or test, name those sessions in the block reason
 - Never edits a file under `context/`. Those are contracts. A wrong spec is a human decision.
 - Never answers an owed decision. It surfaces the question and blocks.
 - Never batches features. One per card, one per delegation, always.
-- Never retries a failed delegation automatically. A retry without new information is the same failure again. The card stays blocked until a human unblocks it.
+- Never retries a failed delegation blindly. The fix loop (B2b) is not a retry: it runs only when a written contract already defines correct, and each round produces new information — the fix, the re-run check, and the report. A retry *without* new information is the same failure again and stays blocked.
 - Never marks a feature complete itself. It reads the tracker; the builder writes it. `kanban_complete` is called only when the tracker says every feature is done.
-- Never runs any of the thirteen skills in its own session. The four it delegates to — `@selcy-design` (only when the spec carries a `## Design Reference` and the feature has no `design/NN-*.md` yet), `@selcy-implement`, `@selcy-check`, and `@selcy-test` — run inside the delegated `opencode run` sessions, on the models it chose; the other nine it never runs at all, it names them to the engineer. `@selcy-sdd` is the single gated exception: it fires exactly once per project, at bootstrap, when there is no `context/` bundle to read — after that the gate closes and it is named like the rest. `@selcy-design-allin` is named, never run: batching the design phase is the engineer's decision, and a worker that runs it has decided the trade-off for them. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
-- Never creates a second build session for a feature that already has one. An interrupted build is resumed, not restarted. `feat-04` and `feat-04-r1` running side by side is this rule failing.
+- Never runs any of the contract-editing skills in its own session. The ones it delegates — `@selcy-design` (only when the spec carries a `## Design Reference` and the feature has no `design/NN-*.md` yet), `@selcy-implement`, `@selcy-check`, `@selcy-test`, `@selcy-debug` (bug failures, max two rounds), `@selcy-debt` (record only), `@selcy-sync` (drift pass after each wave) — run inside the delegated `opencode run` sessions, on the models it chose. The five it never runs, only names: `@selcy-sdd`, `@selcy-audit`, `@selcy-sdd change`, `@selcy-grill`, `@selcy-design-allin`. `@selcy-sdd` is the single gated exception: it fires exactly once per project, at bootstrap, when there is no `context/` bundle to read — after that the gate closes and it is named like the rest. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
+- Never creates a second build session for a feature that already has one. An interrupted build is resumed, not restarted. `feat-04` and `feat-04-r1` running side by side is this rule failing — and so is `bmkg-cp14-build` through `-build6`, six sessions for one checkpoint. **A non-zero exit is a `--session` resume or a block, never a fresh `--title`.**
 - Never lets the reviewer or the tester edit implementation code. They report; the build session fixes.
 - Never deletes a session the engineer may need. Probe and smoke sessions are the engineer's signal that something ran; deleting them silently is why the engineer stops trusting the session list. Name them in the report instead.
 - Never gives a time estimate for a build. A build's duration depends on the model, the provider, the feature's real size, and how many owed decisions surface, none of which the worker can see. An estimate the engineer arranges their day around and then misses is worse than no estimate. Report **state** instead — what phase the build is in, what it has written, what it is waiting on — which is verifiable and does not expire.
@@ -402,7 +475,7 @@ The session list is the engineer's audit trail, and it becomes useless when it i
 
 - **Name every session you create.** `--title "feat-<NN>-<slug>"`, `-review`, `-test`. A session with an auto-generated title is invisible in the list, and invisible sessions are what the engineer ends up cleaning up by hand.
 
-- **One build session per feature.** This is the rule that failed when a worker crashed mid-build and spawned a sibling. The session id lives in the card, so a resumed run is always possible; there is no situation that justifies a new build session for a feature that already has one.
+- **One build session per feature.** This is the rule that failed when a worker crashed mid-build and spawned a sibling. The session id lives in the card, so a resumed run is always possible; there is no situation that justifies a new build session for a feature that already has one. **Check the session list, not just the card** — a session created by a previous tick that never got recorded in the card is still the build session; adopt it. Naming variants that betrayed this rule in past runs: `-build2` … `-build6`, `-r1` … `-r8`, `-v4-r2`. Same feature, many sessions, none of them resumable by the next tick because none was recorded.
 
 - **Never delete a session you did not create, and never delete a session silently.** If the project has probe sessions (`QWEN_OK`, `MIMO_OK`, smoke tests, empty sessions), name them in the report and let the engineer decide. Deleting them yourself removes the evidence that a probe ran at all, and the engineer who asked for the cleanup cannot tell what was removed.
 
@@ -460,8 +533,8 @@ This section applies to **both** execution modes:
   run this way, which is why no kanban board was created even though the loop
   itself ran.
 
-**The mode changes where the loop runs, never what the delegation says.**
-This is the rule BMKG broke. In hybrid mode it is tempting to write the build
+**The mode changes where the loop runs, never what the delegation says.** This is
+the rule BMKG broke. In hybrid mode it is tempting to write the build
 prompt yourself — a long paraphrase of the spec, a checklist, some advice —
 and hand that to `opencode run` instead of the skill command. That is
 forbidden in **both** modes. The delegation is always
@@ -471,13 +544,23 @@ runs the **input coverage gate** — it enumerates every value the build must
 produce and stops on any value with no named source in the bundle — which a
 prompt the orchestrator invented has no equivalent for. A hand prompt in
 hybrid mode is a worker quietly removing the gate that makes unattended
-builds safe. The same holds for the review and test stages: they run in
+builds safe.
+
+The same holds for the review and test stages: they run in
 **separate `opencode run` sessions that carry the skill command**
 (`@selcy-check review`, and the test stage below), not as something the
 orchestrator improvises inline in its own chat. The orchestrator's own
 session never hosts the review; a review that lives in the orchestrator's
 chat is a review that inherits the orchestrator's blind spots instead of the
 builder's — same failure, different session.
+
+**Wave review sessions are not an exception to that rule — they are the same
+rule applied to a batch.** The wave's review is still a delegated
+`opencode run` carrying `@selcy-check review` per feature, one independent
+session on a different model. Which features belong to the wave, and how the
+worker recognizes one, is spelled out under [Scheduling](#scheduling-the-dependency-graph-waves-and-parallel-execution):
+siblings in a wave are independent by construction, which is exactly what
+makes one session for them safe.
 
 ### What an edge means
 
@@ -505,27 +588,37 @@ features whose dependencies are all in wave 1. And so on. The critical path
 (the longest chain) determines the minimum number of waves; everything off
 that chain is free parallelism.
 
-### Concurrency limit: 1 default (serial), more only if the engineer says so
+### Concurrency limit: 2 default, more only if the engineer says so
 
 The concurrency limit is how many builds are allowed to be in flight at once.
-Default is **1** — serial, one feature at a time. The orchestrator asks once
-per project, at bootstrap:
+Default is **2** — two features at a time when the wave has that many ready.
+The orchestrator asks once per project, at bootstrap:
 
-> Mode paralel: mau berapa build jalan bersamaan? (default 1 — satu per satu,
-> paling aman)
-> a. 1 (default, serial — aman)
-> b. 2
+> Mode paralel: mau berapa build jalan bersamaan? (default 2)
+> a. 1 — serial, satu per satu (paling aman, paling lambat)
+> b. 2 (default — dua build bersamaan di worktree terpisah)
 > c. 3 (maksimal yang pernah dipakai — kebanyakan provider rate-limit di atas
 >    itu)
 > d. Semua yang siap di gelombang ini (tidak dibatasi — risiko rate-limit
 >    ditanggung project)
 
 The engineer picks; the orchestrator records the answer in the card/tracker
-and reuses it. If the engineer does not answer, **1 is used silently** —
-serial, never more. Setting it higher than the number of ready features in the
-wave changes nothing; it is a cap, not a target. A rate-limit failure during a
-parallel wave blocks *that card* (B4) and the others keep running; it is not a
-reason to lower the limit for the project.
+and reuses it. If the engineer does not answer, **2 is used silently** —
+never more, never less. Setting it higher than the number of ready features in
+the wave changes nothing; it is a cap, not a target. A rate-limit failure
+during a parallel wave blocks *that card* (B4) and the others keep running; it
+is not a reason to lower the limit for the project.
+
+**Why 2, not 1.** The default exists because measurement showed where the time
+goes: across the projects run by this orchestrator, build sessions carried 83%
+of the input tokens and review plus test carried 17%, and every project ran
+serial — concurrency 1 — even when its DAG had independent features ready in
+the same wave. Serial was leaving the free parallelism on the table. The wave
+machinery (worktrees, disjoint-files rule, fan-in) already makes parallel
+safe; the concurrency limit was the one dial still set to cost wall-clock
+time. Two is deliberately modest: it halves the critical path on a typical
+project without approaching provider rate limits, and the engineer can still
+answer `a` and go fully serial.
 
 ### Fan-out and fan-in
 
