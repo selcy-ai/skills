@@ -51,8 +51,21 @@ Read only. Never fix, never edit, never commit. A failure points at `/selcy-debu
 
 1. Resolve the feature, then get its diff: uncommitted changes, plus the commits since the feature went In Progress.
 2. Spawn a reviewer on a different model than the one that wrote the code, on the cheapest tier that can read a diff. Give it the diff, the feature spec, and the standards files. It returns findings; it writes nothing.
-3. Rank what comes back by severity: blocks close, should fix before close, nit. Drop findings that contradict a standards file the code correctly follows; the standards file is the contract, not the reviewer's taste.
+3. Rank what comes back by severity: blocks close, should fix before close, nit. **Run the Lean check alongside it** (below). Drop findings that contradict a standards file the code correctly follows; the standards file is the contract, not the reviewer's taste.
 4. Write the ranked findings to `context/.reviews/<feature>.md`, and report them in plain language.
+
+**The Lean check — every extra line is read, tested, and fixed later.** Review the diff for code that should not exist or should be smaller. For each candidate, name the concrete case and the smallest fix that works — and prefer fixes that delete code; never propose layers, frameworks, or config the problem does not need:
+
+- **delete**: dead code, unused options, speculative features the spec never named
+- **reuse**: the repo already has this helper — name the path
+- **stdlib/native**: the standard library or the platform already does it; a new dependency for a few lines
+- **yagni**: an abstraction with one implementation, config nobody sets
+- **merge**: near-copies that must change together
+- **split**: one function doing several unrelated jobs. Split by job, never by line count, and never into helpers that exist only to make a function look shorter — those are not simplicity, they are the same complexity with more files.
+
+A `shortcut:` comment that names its ceiling and upgrade trigger is a **decision, not a finding** — the builder recorded it deliberately. But a shortcut whose expected load has already crossed the ceiling it names is a finding: the deferral expired and nobody acted on it.
+
+Rank Lean findings as **should fix** when the code will be touched again (duplication that must change together, an abstraction with one implementation) and as **nit** when it is dead weight with no near-term cost.
 
 A finding that reveals a real standards violation goes to `/selcy-implement` to fix. A finding that reveals the standards file itself is wrong is an owed decision: report it, do not edit the standards file here.
 

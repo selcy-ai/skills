@@ -161,6 +161,18 @@ Follow the standards files. They are not suggestions. In particular:
 
 Respect `## Scope Limits`. It lists what the feature deliberately does not do. "Do not add persistence yet" is the line that stops a canvas feature from becoming a persistence feature. If the build seems to need something the scope limits exclude, that is an owed decision, not a license to expand.
 
+**Build the smallest complete change.** The best code is the code never written. Before writing anything new, take the first option that fully works, in order: does it need to exist at all — skip the flexibility nobody asked for; does this codebase already have it (a helper, a component, a pattern) — use it the way the surrounding code does; does the standard library or the platform do it — use it; is an installed dependency enough — never add a dependency for a few lines. The shortest working diff wins, once you know everything it must touch. No abstraction, wrapper, option, or "for later" code that the spec did not ask for; keep the structure and conventions the codebase already has.
+
+A shortcut taken on purpose is honest only when you also write down where it breaks. When you deliberately choose the smaller solution over the robust one, mark it in the code:
+
+```
+shortcut: <ceiling>, <when to upgrade>
+```
+
+One line, next to the code it describes: the **ceiling** is the limit where the shortcut stops being safe, the **trigger** is the event that says it is time to fix it. `// shortcut: cache in memory, fine to 50 active users — move to redis when we pass that` is a decision the next chat can read. A shortcut with no ceiling is not a shortcut, it is an unnoticed debt — and a shortcut that collapses under a load it never named is a production incident that the ledger predicted.
+
+Never cut what the spec or the standards name: validation at trust boundaries, error handling that prevents data loss, security, accessibility, anything `## Check When Done` claims. Trim the code; keep the contract.
+
 ### Step 4: Self check
 
 Run, in order:

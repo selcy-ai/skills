@@ -35,6 +35,7 @@ A finding with no owner is noise. `progress-tracker.md` Session Notes is a list 
 - **No argument** → record mode. You bring the finding, this skill writes it down.
 - **`list`** → read only. Print the debt file grouped by owner, open first, resolved last. Use it at the start of a chat that is about to touch a module, to see what the last chat learned.
 - **`<module>`** → read only, filtered. `selcy-debt auth` prints only the findings whose owner or module is `auth`. Run this before you touch that module.
+- **`shortcuts`** → read only. Grep the repo for `shortcut:` comments and list them as a ledger — one row per marker, with the ceiling and upgrade trigger pulled straight from the comment. A shortcut is a deferral the builder took on purpose, named with its ceiling and its trigger; this command is what keeps a deferral from quietly becoming permanent. Flag any marker that names no upgrade trigger (`no-trigger`) — those are the ones that silently rot. Nothing found: `No shortcut debt. Clean ledger.`
 - **`resolve <id>`** → mark one finding resolved. Takes a one line how, and the command or commit that fixed it. Does not delete the row; resolved rows are the audit trail that the debt was real and is gone.
 - **`triage`** → review every `unowned` finding and assign it an owner, one panel. Use it when the unowned list grows past a handful.
 
