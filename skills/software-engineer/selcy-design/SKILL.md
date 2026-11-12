@@ -93,6 +93,18 @@ lihat kontrak masing-masing di bawah.
 `-ref.html` selalu ada, PNG/preview selalu ada. Jangan pernah mengubah
 penamaan itu — tujuh file lain menganggap kontrak ini tetap.
 
+**Aturan yang dibagi Backend B dan C.** Tools-nya berbeda (B = MCP VS
+Code/opencode, C = daemon Linux), tapi kedua backend ini tunduk pada aturan
+yang sama, ditulis sekali di sini:
+
+- **`ui-context.md` adalah sumber kebenaran, satu arah.** Token mengalir
+  `ui-context.md` → design system Open Design, tidak pernah sebaliknya.
+  Kalau `ui-context.md` berubah (lewat `/selcy-sync`), design system-nya
+  dibaca ulang: di B perbarui lewat `set_active_design_system`, di C
+  pertimbangkan ulang slug katalognya.
+- **`stub: true` dilarang** — di `list_open_design_skills` (B) maupun
+  `list_skills` (C), jangan pilih entry yang `stub: true`.
+
 ## Backend A's shape: the single .pen rule
 
 **One product = one `.pen` file.** All screens of all features live as
@@ -310,8 +322,8 @@ create_project(name: "<project-slug>" [, skill: "<skillId>"])
 
 ### Step C2: Pilih skillId untuk screen ini
 
-Daftar lengkap lewat `list_skills` (jangan pilih yang `stub: true`).
-Penamaan **bukan** `od:prototype:...` — id skill bermacam-macam. Pilihan
+Daftar lengkap lewat `list_skills`. Penamaan **bukan**
+`od:prototype:...` — id skill bermacam-macam. Pilihan
 umum (verifikasi id di host-mu karena bisa berubah):
 
 | Kebutuhan screen | skillId kandidat |
@@ -344,9 +356,8 @@ design system custom** — Open Design menyediakan katalog siap pakai:
 
 Aturan: **pemilihan slug adalah keputusan engineer** — kandidat
 (dengan ringkasan warna/font) wajib disampaikan di kickoff, bukan
-dipilih diam-diam. Satu arah: `ui-context.md` → token OD, tidak pernah
-sebaliknya. Kalau `ui-context.md` berubah (lewat `/selcy-sync`),
-pertimbangkan ulang slug-nya.
+dipilih diam-diam. Aturan satu arah dan follow-up `selcy-sync` ada di
+blok "Aturan yang dibagi B dan C" di atas.
 
 ### Step C4: Tiap screen = satu run
 
@@ -481,9 +492,9 @@ menjadi kontrak downstream (dibaca `/selcy-implement` dan
 pindahkan tokennya (warna, font, radius) menjadi design system Open Design
 lewat `create_open_design_design_system` (name = nama proyek), lalu
 `set_active_design_system`. Setiap screen memakai design system ini —
-jangan biarkan Open Design memakai token acak. Kalau `ui-context.md`
-berubah (lewat `/selcy-sync`), perbarui design system-nya juga. Satu
-arah: `ui-context.md` → design system, tidak pernah sebaliknya.
+jangan biarkan Open Design memakai token acak. Aturan satu arah dan
+follow-up `selcy-sync` ditulis sekali di blok "Aturan yang dibagi B dan C"
+di atas.
 
 ### Tiap screen = satu artifact, semuanya dalam satu collection
 
@@ -501,7 +512,6 @@ Per screen:
    `od:prototype:saas-landing` untuk landing). `brief` berisi screen dari
    `## Design Reference` + token; sertakan `collectionId`,
    `collectionName`, `screenRole` (mis. `dashboard`), dan `screenTotal`.
-   Jangan pilih entry `stub: true`.
 2. Tulis HTML-nya sesuai instructions yang dikembalikan, langsung ke
    `.open-design/NN-<slug>/NN-<slug>.html` (bukan `design/` — lihat aturan
    output directory di bawah).
