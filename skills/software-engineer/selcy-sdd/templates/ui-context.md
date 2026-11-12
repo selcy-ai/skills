@@ -30,7 +30,9 @@ Radius increases with surface depth — smaller for inner elements, larger for o
 
 ## Component Conventions
 
-<COMPONENT_CONVENTION_BULLETS>## Design Reference
+<COMPONENT_CONVENTION_BULLETS>
+
+## Design Reference
 
 <DESIGN_REFERENCE_BLOCK>
 
