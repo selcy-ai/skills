@@ -140,6 +140,8 @@ A spec written by `@selcy-sdd change` is worked exactly like a feature spec: sam
 
 If Current Goal is missing or names no spec file, stop. That is a bundle state a human must fix.
 
+**No bundle yet — the tier question.** When no `context/` bundle exists and the engineer has not run `/selcy-sdd` yet, bootstrap asks once, in plain text, as a decision panel: **full or lite?** No recommendation, no inference from project size, no pre-marked option (decision 2D). Lite is the engineer's call to name, never the orchestrator's to suggest — a small-looking project may still want the full interview, and only the engineer knows. When the engineer answers, name the command that makes it: `@selcy-sdd` or `@selcy-sdd lite`. Never run it yourself; `@selcy-sdd` is the one gated exception below.
+
 ### A1. Create one card per remaining feature
 
 For each feature the tracker names as not completed:

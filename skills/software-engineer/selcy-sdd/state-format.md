@@ -17,6 +17,7 @@ Read this before first reading or writing `context/.sdd-state.md`. It is the res
 
 **Project:** <name>
 **Doc language:** <Indonesian or English>
+**Tier:** <full or lite>
 **Stage:** <the stage name the interview stopped at, e.g. Stage 3: Stack>
 **Round:** <the round number within that stage, e.g. 2 of 3>
 **Plan approved:** <no, or yes with the date>

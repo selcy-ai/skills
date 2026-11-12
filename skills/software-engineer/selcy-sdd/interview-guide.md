@@ -24,6 +24,35 @@ Every question is a decision panel, never a neutral menu:
 
 State is saved after every round, so a lost chat resumes cleanly.
 
+## Lite tier
+
+`/selcy-sdd lite` runs the same design tree, but the frontier is pre-cut for a small project: a landing page, a portfolio, a personal tool under ~3 features, a single-purpose wrapper. Same file contracts come out the other end — 13 downstream skills read them, so nothing is dropped, only the interview that fills them is shorter.
+
+**What changes:** Stage 0 stays, Stages 3b–3e (architecture shape, security, error handling, testing) and Stage 2 (SEO/analytics/legal) **default instead of asking**, and Stage 6 defaults to Skateboard. **What never changes:** Stage 0 MVP boundary, Stage 3 stack, Stage 7 feature list, and the final approval round — those are the engineer's calls, always.
+
+**Detection is never automatic.** The orchestrator may ask "full or lite?" as a plain panel when the project is fresh, but never recommends, never infers, and never silently picks. Only the engineer names the tier, in chat or with `lite`.
+
+### The lite interview (~5 rounds)
+
+| Round | Asks | Everything else |
+|---|---|---|
+| 1 | Product name, one line description, MVP boundary, doc language | Stage 1 capabilities inferred from the description |
+| 2 | Stack: framework + hosting only | Language, ORM, storage, auth inferred from the stack; env var table written from it |
+| 3 | UI theme mode (light/dark) + whether any screen needs a mockup | Typography, component foundation, design references from the theme |
+| 4 | The feature list, in order | Decomposition + the dependency graph still run, both mandatory |
+| 5 | **The standards panel** — every defaulted file shown once, as one panel: what is in `security-standards.md`, `error-handling.md`, `testing-standards.md`, `architecture-standards.md`, `data-model.md`. Approve as is, or edit any file's contents inline | |
+| 6 | Confirmation round: full plan shown back, same as full tier | |
+
+**The standards panel is the one place lite does not decide silently** (decision 1A): the defaults are written where the engineer can see and veto them in one round, not four stages of questions. If the engineer edits a default, the edited value is written — the default was a proposal, never a decision.
+
+**Skipped stages still write files.** The 15-file bundle is identical in shape; `security-standards.md` exists in lite too, just filled with its default ("validate input at trust boundaries; no plaintext secrets; no auth escalation") rather than interviewed. A file present with defaults is a contract the builder can still read; a file missing is a gap the builder fills with guesses. That is why lite never drops files.
+
+**Stage 6 in lite defaults to Skateboard** — thinnest usable whole first — because lite is for MVPs and validation, where wrong is cheap. Say the default out loud; the engineer may still pick Tracer Bullet or any other.
+
+**Check When Done in lite specs:** minimum 3 verifiable items, still interactive — the app runs on the dev server (open the URL, click the main flow), plus lint and typecheck. Fewer items than full, never zero, never non-verifiable.
+
+**If it grows past small:** the tier line in state is the engineer's to change anytime. `/selcy-sdd context` regenerates the bundle from state with the new tier, and the interview only asks the stages the old tier skipped — a project that grows re-answers what it defaulted, it does not redo everything.
+
 ## Stage 0: Framing (3 to 5 rounds)
 
 The product and the working terms. Cheap to ask, and everything downstream reads them.

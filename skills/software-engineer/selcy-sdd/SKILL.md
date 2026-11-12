@@ -1,7 +1,7 @@
 ---
 name: selcy-sdd
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Agent, AskUserQuestion
-description: "Run /selcy-sdd once at project start. Interviews you in structured rounds (combining /scope product questions with /architect technical questions), then batch generates the full SDD context bundle plus numbered feature specs. Safe to resume in a new chat. Each feature spec is then built with /selcy-implement in its own chat."
+description: "Run /selcy-sdd once at project start. Interviews you in structured rounds (combining /scope product questions with /architect technical questions), then batch generates the full SDD context bundle plus numbered feature specs. Safe to resume in a new chat. Each feature spec is then built with /selcy-implement in its own chat. /selcy-sdd lite is the small-project door: same bundle, shorter interview."
 ---
 
 ## What this skill does
@@ -109,6 +109,7 @@ One command, intent inferred from state (never a subcommand you must memorize):
 - **`specs <feature>`** → regenerate or add one feature spec only. Use it to enroll a feature you forgot, or to rework one spec without touching the rest.
 - **`context`** → regenerate only the six context files plus the root `AGENTS.md` from state. Use it when the interview answers changed but the feature list did not.
 - **`change`** → the modification door. Interview the change, compute its blast radius, write one change spec. Works on any bundle, including one written by `/selcy-audit`. See **Change mode** below.
+- **`lite`** → the small-project door. Same design tree, pre-cut frontier: a landing page, a portfolio, a personal tool under ~3 features. Stages 2 and 3b–3e default instead of asking, shown once as a standards panel for approval (you can edit any default there). Same 15-file bundle, same downstream contracts — the interview is shorter, the output is not. The lite interview is specified in `interview-guide.md` under **Lite tier**. Detection is never automatic: this is your call to make, never the skill's or the orchestrator's recommendation.
 
 Ambiguous (a feature name that also looks like a keyword) → infer the most likely reading, say which one you chose.
 
@@ -129,6 +130,7 @@ Bundled files, all paths relative to this skill's folder, read on demand not upf
 Read `context/.sdd-state.md` if it exists (else fresh). Then:
 
 - Fresh → Step 1.
+- Argument is `lite` → set `Tier: lite` in state, then Step 1 under the lite interview in `interview-guide.md`. A state that already says `Tier: lite` follows it without an argument.
 - State exists and argument is `resume` or empty → Step 1, resuming from the last answered round.
 - Argument is `specs` → skip to Step 4, all features.
 - Argument is `specs <feature>` → skip to Step 4, that feature only.
@@ -139,7 +141,7 @@ Tell the user which route you took in one line.
 
 ### Step 1: Interview
 
-Read `interview-guide.md` in full before asking anything, then run it. It holds the stages, the round mechanics, and the completeness gate. Save state after every round.
+Read `interview-guide.md` in full before asking anything, then run it. It holds the stages, the round mechanics, the **Lite tier** door, and the completeness gate. Save state after every round.
 
 The interview ends with one confirmation panel: the full plan (stack, build approach, workflow tier, ordered feature list, deferred list) shown back for approval. Only after you approve does generation start. Until then, anything can still change.
 
