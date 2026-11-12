@@ -475,11 +475,15 @@ Then call `kanban_block(reason="...")` with:
 - **The exact command** to resume once the engineer has resolved it.
 
 **Missing prototype is a block, not a guess.** If the feature spec names a
-`## UI Reference` whose file does not exist at the project root (no
-`design-<name>.pen`, no PNG), the worker does **not** let the builder invent
+`## Design Reference` whose file does not exist (no
+`design/<project>.pen`, no PNG, no `design/NN-*.md` +
+`design/<project>-ref.html`), the worker does **not** let the builder invent
 the screen. Block the card as a **Gate mismatch**: name the missing reference
-file, and say the unblock is a validated prototype at that path (pen.dev
-session with the spec's screen list + `ui-context.md` tokens, saved to root).
+file, and say the unblock is a validated prototype at that path (`/selcy-design`
+session with the spec's screen list + `ui-context.md` tokens, per the
+`design backend:` line's chosen backend — pen.dev, Open Design MCP, or the
+Open Design daemon; the prototype lands in `design/` whichever backend wrote
+it).
 A builder that proceeds without the frame redesigns the screen from taste,
 and the review stage then has nothing to compare the render against.
 
