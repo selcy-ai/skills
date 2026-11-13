@@ -18,6 +18,7 @@ description: "Turns an approved @selcy-sdd spec bundle into a kanban board of fe
   - [A2. Report and finish](#a2-report-and-finish)
 - [Phase B: The worker loop](#phase-b-the-worker-loop)
   - [B0. Read the card](#b0-read-the-card)
+  - [B0b. Where design runs](#b0b-where-design-runs--the-one-delegated-skill-with-a-choice)
   - [B1. Delegate one feature](#b1-delegate-one-feature)
   - [B2. Read the result](#b2-read-the-result)
   - [B2b. The fix loop, when the failure is a bug](#b2b-the-fix-loop-when-the-failure-is-a-bug)
@@ -241,6 +242,40 @@ This is the difference between one session per feature and three. If you skip th
 - **None exist** → first attempt. Proceed with B1a.
 
 The reason is B1b's: a build that errored is resumed with `--session`, never restarted as `-build2` or `-r1` — BMKG accumulated six sessions for one checkpoint that way, each re-reading the bundle the previous already held.
+
+### B0b. Where design runs — the one delegated skill with a choice
+
+Design is different from implement/check/test in one way: its deliverable is
+visual (mockups, `-ref.html`, PNG), and the engineer decides where it runs.
+Both runners execute the **same skill**, so the contract is identical either
+way — only the process wrapping differs.
+
+- **`opencode run` (the default for the batch/UI-heavy case):** design becomes
+  an audit-trailed session like the build. It can use OD's `full_plan`
+  2-run chain, which the opencode host drives to completion on its own. The
+  trade is a new session to manage and a longer wait before the first
+  mockup.
+- **In this Hermes session:** the orchestrator calls
+  `mcp__open_design__start_run`/`get_run` (or the `pen` CLI), screenshots
+  the artifacts (see "Screenshot artifak" in `@selcy-design`), and writes
+  the `design/` notes and symlinks itself. No new session, the engineer
+  sees the PNGs in the chat as they land. The trade: the run has no session
+  in the opencode audit trail to re-read later, and an OD `full_plan`
+  first-run will stop at the planning turn without spawning the production
+  run — the retry with an explicit production instruction is documented in
+  `@selcy-design`'s `references/open-design-known-gotchas.md`.
+
+**Which one is not the worker's call.** When the spec's `## Design Reference`
+is about to be worked, the engineer states the runner once per project —
+"design in Hermes" or "design in opencode" — and it is recorded in a card
+comment plus `progress-tracker.md` like the skill prefix. When the engineer
+is actively in the chat and asked for the design, in-Hermes is the default;
+otherwise `opencode run`. When the engineer has not said either, ask.
+
+Design is the **only** skill with this choice. A worker that runs
+`@selcy-implement` in its own session is a worker writing app code around
+the loop; a worker that runs `@selcy-check` or `@selcy-test` in its own
+session is a worker reviewing its own work. Those three always delegate.
 
 ### B1. Delegate one feature
 
@@ -515,7 +550,7 @@ If the failure came from review or test, name those sessions in the block reason
 - Never batches features. One per card, one per delegation, always.
 - Never retries a failed delegation blindly. The fix loop (B2b) is not a retry: it runs only when a written contract already defines correct, and each round produces new information — the fix, the re-run check, and the report. A retry *without* new information is the same failure again and stays blocked.
 - Never marks a feature complete itself. It reads the tracker; the builder writes it. `kanban_complete` is called only when the tracker says every feature is done.
-- Never runs any of the contract-editing skills in its own session. The ones it delegates — `@selcy-design` (only when the spec carries a `## Design Reference` and the feature has no `design/NN-*.md` yet; never `@selcy-design full`, which is the engineer's batch call), `@selcy-implement`, `@selcy-check`, `@selcy-test`, `@selcy-debug` (bug failures, max two rounds), `@selcy-debt` (record only), `@selcy-sync` (drift pass after each wave) — run inside the delegated `opencode run` sessions, on the models it chose. The four it never runs, only names: `@selcy-sdd`, `@selcy-audit`, `@selcy-sdd change`, `@selcy-grill`. `@selcy-sdd` is the single gated exception: it fires exactly once per project, at bootstrap, when there is no `context/` bundle to read — after that the gate closes and it is named like the rest. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf.
+- Never runs any of the contract-editing skills in its own session. The ones it delegates — `@selcy-design` (only when the spec carries a `## Design Reference` and the feature has no `design/NN-*.md` yet; never `@selcy-design full`, which is the engineer's batch call), `@selcy-implement`, `@selcy-check`, `@selcy-test`, `@selcy-debug` (bug failures, max two rounds), `@selcy-debt` (record only), `@selcy-sync` (drift pass after each wave) — run inside the delegated `opencode run` sessions, on the models it chose. The four it never runs, only names: `@selcy-sdd`, `@selcy-audit`, `@selcy-sdd change`, `@selcy-grill`. `@selcy-sdd` is the single gated exception: it fires exactly once per project, at bootstrap, when there is no `context/` bundle to read — after that the gate closes and it is named like the rest. The orchestrator delegating to itself is the loop it exists to prevent, and a worker that runs `@selcy-grill` is a worker answering an owed decision on the engineer's behalf. `@selcy-design` is the one skill with a runner choice: delegated by default, but the engineer can direct it to run in this Hermes session (B0b) because its deliverable is visual and belongs in the chat.
 - Never creates a second build session for a feature that already has one (B1b: resume, never restart; B0: check the list first).
 - Never lets the reviewer or the tester edit implementation code. They report; the build session fixes.
 - Never deletes a session the engineer may need. Probe and smoke sessions are the engineer's signal that something ran; deleting them silently is why the engineer stops trusting the session list. Name them in the report instead.
