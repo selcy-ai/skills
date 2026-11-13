@@ -1,7 +1,7 @@
 ---
 name: selcy-design
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, AskUserQuestion
-description: "Run /selcy-design before /selcy-implement for any feature whose spec carries a ## Design Reference. Works on three backends — pen.dev CLI (Linux), Open Design via MCP (Linux daemon or Windows / VS Code / opencode) — recorded once in ui-context.md. Auto-detects OS and tool availability, proposes a default, asks the engineer once per project. Either way it appends the feature's screens to the project's single design collection, resolves cross-screen inconsistencies before they reach the builder, exports the builder's -ref.html plus PNG, and writes design/NN-name.md naming screens and tokens. Pair worker with /selcy-implement for UI."
+description: "Run /selcy-design before /selcy-implement for any feature whose spec carries a ## Design Reference. Works on three backends — pen.dev CLI (Linux), Open Design via MCP (Linux daemon or Windows / VS Code / opencode) — recorded once in ui-context.md. Auto-detects OS and tool availability, proposes a default, asks the engineer once per project. Either way it appends the feature's screens to the project's single design collection, resolves cross-screen inconsistencies before they reach the builder, exports the builder's -ref.html plus PNG, and writes design/NN-name.md naming screens and tokens. /selcy-design full is the batch mode: every UI feature in one chat, one review of the whole surface, for products whose data model is already stable. Pair worker with /selcy-implement for UI."
 ---
 
 # selcy-design — design worker for the SELCy loop
@@ -618,6 +618,132 @@ Backend-neutral. Isi minimum setiap run:
 File ini adalah apa yang `/selcy-implement` baca sebagai kontrak visual,
 bersama `-ref.html`.
 
+## Commands
+
+Satu perintah, mode diambil dari argumen:
+
+- **No argument** → mode per-fitur (default). Desain satu fitur, satu
+  obrolan, lalu `/selcy-implement NN` di obrolan baru.
+- **`full`** → mode batch. Desain setiap fitur UI dalam satu obrolan,
+  berurutan, lalu satu tinjauan gabungan dari seluruh surface. Mode ini
+  menggantikan `/selcy-design-allin` (lihat **Mode full** di bawah).
+
+## Mode full
+
+`/selcy-design full` — pintu batch untuk produk yang data model-nya
+sudah stabil. Jalankan **sekali per proyek**, setelah `/selcy-sdd` (atau
+`/selcy-audit`) menulis bundle dan **sebelum `/selcy-implement`
+pertama**. Menggantikan panggung desain dari loop, bukan menambahinya —
+menjalankan mode ini lalu juga menjalankan mode per-fitur adalah
+menggandakan kerja.
+
+**Pertukarannya, dinyatakan di depan.** Setiap layar didesain sebelum
+umpan balik build ada. Mode per-fitur mendesain fitur 05 **setelah**
+fitur 03 dibangun, jadi mockup untuk 05 merefleksikan data model yang
+sebenarnya dihasilkan 03. Mode full mendesain 03 dan 05 di waktu yang
+sama, jadi mockup 05 merefleksikan apa yang **dikatakan** spec tentang
+03. Kalau keduanya berbeda, beberapa layar menjadi usang dan digambar
+ulang.
+
+Itu harganya. Apa yang dibeli: satu tinjauan yang mencakup seluruh
+permukaan produk, token konsisten di setiap layar secara konstruksi, dan
+tidak ada pergantian konteks desain-vs-build per fitur. Engineer
+menyetujui satu hal, bukan tujuh.
+
+**Panel pertukaran adalah pertanyaan pertama, wajib, bukan opsional.**
+Jangan mulai mendesain dengan asumsi diam-diam — sebuah run yang
+mendesain 8 layar yang engineer ingin didesain per-fitur adalah run yang
+harus dibuang.
+
+### Step F0: Gate
+
+1. `context/feature-specs/` ada dan berisi specs? Tidak → stop, bundle
+   belum siap. Sebut `/selcy-sdd`.
+2. `context/ui-context.md` mencatat baris `design backend:`? Tidak →
+   stop. Sebut `/selcy-design` (yang punya deteksi) dan katakan engineer
+   juga bisa menjawab pertanyaan backend di sana lalu kembali.
+   Ya → pakai backend itu verbatim untuk setiap layar.
+3. Pindai setiap spec untuk `## Design Reference`. **Tidak ada spec yang
+   membawanya** → stop dan katakan: produk ini tidak butuh mockup, mode
+   ini tidak ada kerjaan. Itu bukan kegagalan.
+4. Spec yang membawanya: **N**. Daftarkan ke engineer dengan nomor dan
+   namanya, nyatakan pertukaran di atas, dan ajukan satu pertanyaan:
+   batch semua N sekarang (mode ini), atau desain per fitur di dalam
+   loop (`/selcy-design NN`)? Defaultnya per fitur. Hanya setelah
+   engineer memilih batch, run berlanjut.
+
+### Step F1: Kickoff
+
+Sama seperti Step 1 mode per-fitur (sekali per proyek): baca
+`ui-context.md`, buat karya produk di backend tercatat dengan
+shell navigasi, ekspor PNG/previewUrl kickoff, tunggu persetujuan
+engineer **sebelum** fitur pertama dibangun. Design system adalah
+kontrak; mengubahnya setelah 10 layar ada adalah pekerjaan besar.
+
+### Step F2: Desain setiap fitur, berurutan, dalam obrolan ini
+
+Untuk setiap spec yang membawa `## Design Reference`, **urutan fitur**:
+
+1. Baca `## Design Reference` spec itu + `ui-context.md` + layar yang
+   sudah didesain di run ini (konsistensi antar-fitur lebih penting di
+   sini daripada di mode per-fitur, karena tidak akan ada umpan balik
+   build di antaranya).
+2. Terapkan quality bar — `antislop`, `antislop-ui`,
+   `antislop-layoutmobile`, `antislop-copywriting`, `ui-ux-pro-max`,
+   dan referensi komponen siap pakai. Standar yang sama dengan mode
+   per-fitur.
+3. Desain layar fitur di backend tercatat, mengikuti **Step 2 mode
+   per-fitur** untuk backend itu (A/B/C sesuai `design backend:`).
+4. **Stop pada kegagalan pertama.** Error backend, gate mismatch,
+   inkonsistensi yang tidak bisa diselesaikan — run berhenti di situ dan
+   melaporkan fitur mana yang menghentikannya. Jangan lanjut ke fitur
+   berikutnya dengan harapan lebih baik; kegagalan di tengah batch
+   adalah kegagalan batch. Engineer menyelesaikannya dan re-run dari
+   fitur itu.
+5. Ekspor per backend tercatat (PNG + `-ref.html` per layar, atau
+   previewUrl + symlink di backend C) dan perbarui index
+   (`design/<project>-ref.html` atau frame `00 · Panduan`).
+
+**Layar satu fitur harus selesai sepenuhnya sebelum fitur berikutnya
+mulai.** Tidak diinterleave. Batch adalah urutan desain per-fitur yang
+lengkap, bukan satu desain dari semua layar sekaligus — isolasi yang
+membuat kesalahan di satu fitur tidak menjangkau fitur lain tetap
+dipertahankan, hanya batas obrolan antar fitur yang dihilangkan.
+
+### Step F3: Tulis catatannya
+
+Satu `design/NN-<nama>.md` per fitur, format yang sama dengan mode
+per-fitur (lihat **Output** di atas). Tambah satu baris per fitur di
+`progress-tracker.md`: `feature NN designed, artifacts at
+design/NN-*.md + -ref.html`.
+
+### Step F4: Tinjauan tunggal — inti dari mode full
+
+Semua layar selesai, engineer melihatnya **bersama-sama, sekali**:
+
+- Setiap `design/NN-*.md`, digabungkan jadi satu laporan dikelompokkan
+  per fitur, dengan keputusan inkonsistensi dan komponen siap pakai
+  yang dipakai.
+- Index (`design/<project>-ref.html` atau frame `00 · Panduan`), yang
+  sekarang mencatat setiap layar produk — ini satu-satunya artifak yang
+  menampilkan seluruh permukaan Sekaligus, dan di sini lengkap.
+- Setiap PNG atau previewUrl, satu path per baris.
+- Pengingat pertukaran: layar-layar ini merefleksikan spec, bukan
+  perilaku yang sudah dibangun, dan setiap fitur yang build-nya
+  mengubah data model bisa membatalkan layar setelahnya.
+
+Engineer menyetujui, meminta perubahan, atau menolak batch. Perubahan
+kembali ke Step F2 untuk fitur yang terkena.
+
+### Step F5: Kembalikan ke loop
+
+Setelah persetujuan, produk didesain persis seperti proyek per-fitur:
+langkah berikutnya adalah `/selcy-implement NN` per fitur, urutan
+fitur, masing-masing di obrolannya sendiri. Orchestrator (jika dipakai)
+mengambil card seperti biasa — ia tidak menjalankan `/selcy-design NN`
+untuk fitur yang `design/NN-*.md`-nya sudah ada dan baris trackernya
+berkata designed.
+
 ## Execution
 
 ### Step 0: Route
@@ -741,7 +867,6 @@ dilewati. Next step selalu: `/selcy-implement NN` di chat baru.
 - Never mengABAIKAN quality bar (antislop, aksesibilitas, touch target).
 - Never mengedit `ui-context.md` langsung — perubahan token adalah
   keputusan engineer, lewat `/selcy-sync`.
-- Never mendesain dua fitur dalam satu run.
 - Never menulis kode aplikasi — itu `/selcy-implement`'s.
 - Never mengubah nama artifak (`design/NN-*.md`, `-ref.html`, PNG) —
   tujuh skill lain bergantung pada kontrak itu di ketiga backend.
