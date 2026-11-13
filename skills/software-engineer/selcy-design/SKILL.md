@@ -728,6 +728,11 @@ Semua layar selesai, engineer melihatnya **bersama-sama, sekali**:
   sekarang mencatat setiap layar produk — ini satu-satunya artifak yang
   menampilkan seluruh permukaan Sekaligus, dan di sini lengkap.
 - Setiap PNG atau previewUrl, satu path per baris.
+- **Screenshot per artifak** (lihat "Screenshot artifak" di bawah):
+  satu `design/NN-<slug>.png` per layar produk, path-nya satu per
+  baris, supaya engineer melihat prototype sebagai gambar, bukan cuma
+  path HTML. Backend A sering sudah menghasilkannya; backend C harus
+  dibuat.
 - Pengingat pertukaran: layar-layar ini merefleksikan spec, bukan
   perilaku yang sudah dibangun, dan setiap fitur yang build-nya
   mengubah data model bisa membatalkan layar setelahnya.
@@ -743,6 +748,37 @@ fitur, masing-masing di obrolannya sendiri. Orchestrator (jika dipakai)
 mengambil card seperti biasa — ia tidak menjalankan `/selcy-design NN`
 untuk fitur yang `design/NN-*.md`-nya sudah ada dan baris trackernya
 berkata designed.
+
+## Screenshot artifak
+
+Lengkapilah setiap handoff design (Step 4 per-fitur, Step F4 mode full)
+dengan satu PNG per layar produk — `design/NN-<slug>.png`. Deliverable
+design adalah visual; path HTML saja tidak memperlihatkan hasilnya ke
+engineer. `od export --format image` bawaan Open Design hanya jalan di
+desktop runtime, jadi jangan andalkan itu di server headless.
+
+**Backend A (pen.dev):** export PNG bawaan sering sudah ada — periksa
+`design/*.png` lebih dulu, gunakan yang ada. Jika tidak ada, jalankan
+export pen.dev sekali per frame.
+
+**Backend C (Open Design):** artifaknya adalah HTML di luar repo
+(`.od/projects/…` via symlink). Screenshot sendiri:
+
+```
+/root/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome \
+  --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+  --window-size=1360,900 --screenshot=design/NN-<slug>.png \
+  file://<realpath artifact html>
+```
+
+Atau binary chromium headless manapun yang terpasang (`chromium`,
+`headless-shell`). Gunakan ukuran jendela dari spec (default 1360×900).
+Bisa resolusi tinggi (mis. 2×) untuk screenshot yang akan dibaca
+engineer sebagai gambar laporan.
+
+shortcut: 3 artifact per run, batas wajar untuk screenshot manual —
+lebih dari itu, tulis loop shell satu kali, jangan per-frame fungsi
+baru.
 
 ## Execution
 
@@ -838,7 +874,9 @@ daemon ini saja — ingatkan engineer untuk membuka via `get_run` lagi
 kalau sudah restart) + symlink `design/NN-<slug>-ref.html` +
 `agentMessage`. **Tidak ada `.pen`, tidak ada PNG wajib** — kirim
 previewUrl + symlink saja. Sebut `projectId` dan `artifactRef` juga,
-supaya engineer bisa membuka ulang artifact-nya. Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
+supaya engineer bisa membuka ulang artifact-nya. Lalu screenshot artifak
+HTML-nya (lihat "Screenshot artifak") dan kirim PNG-nya juga — previewUrl
+daemon tidak permanen, PNG-nya yang bisa engineer lihat kembali. Pengiriman tidak pernah otomatis: skill wajib menulis pesan ini,
 satu path per baris, di akhir setiap run. Tanpa pesan ini, engineer tidak
 menerima apa-apa.
 Lapor: frame apa yang dibuat, keputusan inkonsistensi apa yang diambil,
