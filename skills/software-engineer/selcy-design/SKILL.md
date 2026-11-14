@@ -255,7 +255,10 @@ interactive mode.
 
 Backend untuk host Linux tempat daemon Open Design berjalan dan MCP-nya
 terkoneksi dari sesi Hermes/opencode ini. Semua interaksi lewat tool MCP
-`mcp__open_design__*`.
+`mcp__open_design__*`. Jebakannya (`od export` image, route `full_plan`
+dari klien eksternal, polling, biaya, nama tool MCP, `.od-frames/`) ada
+di `references/open-design-known-gotchas.md` — baca saat backend C
+dipilih, tidak semua sekaligus.
 
 **Penting: agen OD yang men-generate, bukan kamu.** Backend A menulis
 prompt lalu `pen` men-generate frame; backend B kamu sendiri menulis
@@ -351,13 +354,23 @@ design system custom** — Open Design menyediakan katalog siap pakai:
 3. Pilih slug yang paling dekat dgn `ui-context.md`. Kalau tidak ada
    yang cocok, pilih `default` dan perjelas prompt di `start_run` dengan
    token eksplisit (warna, font, radius) dari `ui-context.md`.
-4. Pasang saat `create_project(designSystem: "od://design-systems/<slug>")`
-   atau simpan untuk dikirim per-run.
+4. Pasang saat `create_project(designSystem: "<slug>")` — **slug id
+   saja** (`linear-app`), BUKAN URI; `od://design-systems/…` ditolak
+   dengan `DESIGN_SYSTEM_NOT_FOUND`. Atau simpan untuk dikirim
+   per-run.
 
 Aturan: **pemilihan slug adalah keputusan engineer** — kandidat
 (dengan ringkasan warna/font) wajib disampaikan di kickoff, bukan
 dipilih diam-diam. Aturan satu arah dan follow-up `selcy-sync` ada di
 blok "Aturan yang dibagi B dan C" di atas.
+
+**Slug menimpa token `ui-context.md`.** Begitu sebuah slug terpasang,
+agen OD membaca token dari `DESIGN.md` slug itu dan token
+`ui-context.md` tidak dipakai — keduanya tidak bisa berjalan bersama.
+Pilih satu: pakai token sendiri (jangan pasang slug, sebut token
+eksplisit di setiap prompt) atau pakai slug katalog (token mengikuti
+slug, prompt lebih pendek dan prompt cache lebih panas). Nyatakan
+pilihan ini ke engineer saat kickoff, jangan memutuskan diam-diam.
 
 ### Step C4: Tiap screen = satu run
 
@@ -882,6 +895,14 @@ menerima apa-apa.
 Lapor: frame apa yang dibuat, keputusan inkonsistensi apa yang diambil,
 komponen siap pakai apa yang dipakai, dan tidak ada langkah verifikasi yang
 dilewati. Next step selalu: `/selcy-implement NN` di chat baru.
+
+**Hasil dulu, saran belakang.** Bagian pertama pesan handoff adalah bukti
+karya — artifak, verifikasi, keputusan yang diambil. Saran langkah
+selanjutnya, ide perbaikan, atau pertanyaan eksplorasi datang **setelah**
+hasil disampaikan, atau tidak sama sekali kecuali diminta. Engineer yang
+menerima saran sebelum melihat hasilnya akan menanyanya sebagai jika saran
+itu lebih penting dari karyanya — dan pertanyaan yang seharusnya tentang
+hasil berubah menjadi pertanyaan tentang mengapa skill melompat ke depan.
 
 ## What this skill never does
 
