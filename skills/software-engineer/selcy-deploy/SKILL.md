@@ -17,7 +17,7 @@ Scope: **read the project's stack, run preflight checks, and report what will br
 - Staging or production deploy of any project.
 - Handoff to a client: the runbook this skill produces is the handoff document.
 - After a domain change (custom domain, CORS origin, redirect) — the two most common post-deploy breakages live here.
-- When `context/architecture-context.md` names a deploy target (Cloudflare Pages, Workers, Supabase) but no deploy has ever been run.
+- When `context/architecture-context.md` names a deploy target (Dokploy, Cloudflare Pages, Workers, Supabase) but no deploy has ever been run.
 
 ## The knowledge base
 
@@ -28,6 +28,16 @@ These are the facts, each with the failure it prevents. None of them is general 
 `.env.local` and friends are **build-time** inputs for a Vite app: Vite bakes `VITE_*` vars into the production bundle at build time. On Cloudflare Pages, the build runs in CI, where `.env.local` does not exist — so you must configure the vars in the Pages project (dashboard or `wrangler pages secret put`), or pass them explicitly to the local build command when you need a preview build.
 
 The failure: you build locally with `.env.local`, deploy, and the app silently points at the wrong (or empty) backend because the CI build had different vars baked in. **Rule: whatever env the deployed bundle runs with must be decided explicitly at build time — never inherited from the developer's machine.** The same rule makes test builds deterministic (see `/selcy-test`'s build-env-leak section; this is the production side of that same fact).
+
+### Dokploy + Traefik — the ingress is host-based, not port-based
+
+An application deployed by Dokploy is reachable **only through Traefik host rules**. `ports: []` is the normal configuration, not a misconfiguration: the container publishes nothing to the host. A **404 on the Dokploy server's 80/443** means "no router registered for that Host" — almost always no domain attached — not "the app is down". Do not look for an `IP:port` to hand to the engineer; there is none until a domain routes to the container. `previewPort`/`previewHttps` configure preview deployments, a separate feature that is not a production access path.
+
+**Domains are attached in the dashboard, not through the API.** The Dokploy MCP exposes read and validate endpoints (`domain.byApplicationId`, `domain.validateDomain`) but no create call. `validateDomain` is the useful one even when it fails: the error lists the server's accepted IPs — its public/WAN addresses, never the LAN address of the host. DNS must point at one of those, and the router must forward **80 + 443** to the Dokploy host: 80 for the ACME challenge, 443 for traffic. The LAN address answers only from inside the LAN. To exercise a router before DNS lands, hit the Traefik LAN address with a `Host:` header (`curl -k -H "Host: <domain>" https://<dokploy-lan-ip>/`): a 404 means no router, a 502 means the router is up and the backend is not reachable.
+
+**A 502 is the mirror-image case: the router exists, the backend port is wrong.** Dokploy sets the container's `PORT` env at runtime to its own assignment, overriding whatever the Dockerfile declared — the app listens on that port regardless of `ENV PORT`/`EXPOSE`. The domain's **port field must match the runtime port, not the Dockerfile's**: a container that is healthy and serving still answers 502 through the domain when they differ. Find the runtime port from the Traefik API (`GET http://<dokploy-host>:8080/api/http/services` — the service URL shows `http://<appName>:<port>`) or on the host with `docker exec <container> env | grep PORT`, then fix the domain port in the dashboard. Minimal images ship no curl or wget — probe the backend from inside with `docker exec <container> node -e "fetch('http://localhost:<port>/').then(r => console.log(r.status))"`, not with a shell client that is not there.
+
+**`applicationStatus: done` means the image built and the deployment record finished — not that the app answers requests.** A deploy call that returns `success: true` is not proof a build ran; read the application's `deployments` list and confirm a new entry with the expected commit instead of trusting the status field. `server.all` can legitimately return an empty list on a working single-node instance that runs on the main Dokploy node — treat `serverId: null` as "main node", not as an unconfigured server.
 
 ### Cloudflare Workers — custom domains
 
@@ -68,9 +78,9 @@ Follow this sequence. Report each check as pass/fail with what was actually obse
 2. **Env table check.** Every `VITE_*` / env var the code reads must have a named value for the target environment (local, staging, production). Any var with no value for the target → fail, list it.
 3. **Build with the target env, explicitly.** Build once with the exact env the deployed bundle will use — no `.env.local` inheritance. If the build output differs from a default local build, say so: that difference is the thing that would have broken in CI.
 4. **CORS origin audit.** For every backend the app calls (Supabase Edge Functions, API routes), confirm the allowed origins include every domain that will serve the app, including the new one if a domain was added. Missing origin → fail.
-5. **Domain registration.** If a custom domain is in play, confirm it was registered through the platform's API (Workers `workers/domains`, Pages custom domains), not a manual CNAME to a workers.dev hostname.
+5. **Domain registration.** If a custom domain is in play, confirm it was registered through the platform's own path (Workers `workers/domains`, Pages custom domains, **the Dokploy dashboard** — its API exposes no domain create), not a manual CNAME to a workers.dev hostname. On Dokploy, run `validateDomain` first: its error names the IPs Traefik accepts, which is the checklist for both the DNS record and the router port-forward. If a domain is already attached, also confirm its port field equals the container's runtime `PORT` — Dokploy overrides the Dockerfile's, so the domain port is the one that must match (see the Dokploy section).
 6. **Secure-context features.** List any feature the app uses that requires a secure context (geolocation, clipboard, service workers on some paths, Web Crypto in some browsers). Each must either be on HTTPS in production, or have a user-facing fallback message. Silent absence → fail.
-7. **Secret inventory.** For Supabase: `ALLOWED_ORIGINS` and any function secrets. For Cloudflare: Pages vars, Worker bindings. List them; a missing secret is the most common post-deploy breakage.
+7. **Secret inventory.** For Supabase: `ALLOWED_ORIGINS` and any function secrets. For Cloudflare: Pages vars, Worker bindings. For Dokploy: the application's env vars (read MCP-side as `[REDACTED]` — confirm their names, and confirm in the deployment log that the container received them). List them; a missing secret is the most common post-deploy breakage.
 
 Any fail → stop. Report the failure and the fix from the knowledge base above. Do not deploy around a failed preflight; the preflight exists because each check maps to a real, expensive failure.
 
@@ -89,4 +99,4 @@ Cross-reference `context/architecture-context.md` when its env var table changes
 
 ## Portability
 
-Any Agent Skills client on macOS, Linux, Windows. `git` and (optionally) the platform CLIs (`wrangler`, `supabase`) are the tools; shell snippets are POSIX reference. The knowledge base is stack-specific (Cloudflare + Supabase + Vite) — on a different stack, the preflight sequence still applies, and the knowledge base should be extended with that stack's paid-for facts as the team learns them.
+Any Agent Skills client on macOS, Linux, Windows. `git` and (optionally) the platform CLIs (`wrangler`, `supabase`) are the tools; shell snippets are POSIX reference. The knowledge base is stack-specific (Dokploy + Cloudflare + Supabase + Vite) — on a different stack, the preflight sequence still applies, and the knowledge base should be extended with that stack's paid-for facts as the team learns them.
