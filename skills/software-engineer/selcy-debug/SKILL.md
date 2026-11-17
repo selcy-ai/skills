@@ -53,6 +53,16 @@ Form one hypothesis about the cause. Design the cheapest test that would confirm
 
 Never hold two hypotheses at once, and never fix before a hypothesis is confirmed. A fix built on an unconfirmed guess is a guess about the bug, not a fix for it.
 
+**Before naming a cause, check that a live probe could not already have
+confirmed or refuted it.** A hypothesis that attributes the bug to the
+user's configuration (a missing install, a wrong setting, a stale secret) is
+the dangerous one: it sends the user to fix something that is already
+ correct, and the failure message almost never distinguishes it from its
+neighbors. Enumerate the candidate causes, then look for the one command that
+divides them (an API state read, an anonymous probe, a `get_deployment` log)
+before writing the explanation. An explanation you cannot show the evidence
+for is a guess, and the user reads it as one.
+
 ### Step 4: Fix the root cause
 
 The smallest change that removes the cause. Not the symptom: if the cause is a missing validation, the fix adds the validation, it does not catch the resulting error downstream.
@@ -68,6 +78,10 @@ The bug no longer reproduces under the exact steps from Step 0, and the feature'
 Recommend `/selcy-test` for a regression test that would catch this bug if it returns. Or write a failing test that reproduces the bug, confirm it fails before the fix and passes after, and hand it to the engineer.
 
 The regression test is the point. A bug fixed without one is a bug that can come back unnoticed.
+
+Read `references/paas-deploy-lookalikes.md` when the bug is a PaaS deploy
+failure — five causes share the same two or three failure strings, and that
+table holds the one-call probe that divides them.
 
 ## What this skill never does
 
