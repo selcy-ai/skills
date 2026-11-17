@@ -129,6 +129,7 @@ Bundled files, all paths relative to this skill's folder, read on demand not upf
 
 Read `context/.sdd-state.md` if it exists (else fresh). Then:
 
+- **`docs/prd.md` exists and no state does** → read it before the interview, and say in one line that you are reading it: answers it already settles are not re-asked — the interview confirms or corrects them rather than discovering them. The PRD is an input, never the bundle: nothing in `context/` is written from it until the interview's own confirmation panel is approved, and if the PRD contradicts what the engineer says in the interview, **the engineer's answer wins and you say so**.
 - Fresh → Step 1.
 - Argument is `lite` → set `Tier: lite` in state, then Step 1 under the lite interview in `interview-guide.md`. A state that already says `Tier: lite` follows it without an argument.
 - State exists and argument is `resume` or empty → Step 1, resuming from the last answered round.
