@@ -176,6 +176,21 @@ Aturan pakai: **tiru pola, bukan copy hasil** — urutan blok, gerakan, ritme
 wajib dicatat di `design/NN-*.md` (sumber + pola yang diambil), agar
 tertelusuri dan engineer tahu dari mana suatu keputusan desain berasal.
 
+**Referensi adalah input, bukan pelarian.** Sebelum generate apapun di
+Step 2 — bahkan kalau kamu tidak merasa stuck — deklarasikan **minimal
+satu pola** dari referensi yang akan dipakai screen ini: nama repo +
+blok/pola spesifiknya (mis. "awesome-design-md → pricing: kolom harga
+dengan badge populer di tengah", "animata → bento grid 2-kolom untuk
+panel antrian"). Pola ini ditulis di `design/NN-*.md` di bagian
+**Referensi yang dipakai** bersama alasannya, dan dipakai sebagai
+kerangka saat menulis prompt (backend A/C) atau HTML (backend B).
+
+Referensi mencegah halaman "dirakit dari memori generik" — sumber utama
+AI-slop visual. Layar yang dimulai dari pola yang sudah terbukti punya
+ritme dan hierarki yang dirancang manusia; yang dimulai dari kanvas kosong
+menyerupai ribuan mockup AI lain. Satu pola minimum ini adalah pintu
+masuknya; sisanya tetap mengikuti quality bar di atas.
+
 ## Backend A — the pen.dev CLI
 
 Models change; the contract does not. Use whatever provider the project
@@ -382,6 +397,19 @@ Loop per screen dari `## Design Reference`:
    ke design system slug, dan `screenRole`. Sertakan eksplisit:
    “screen ini milik fitur NN proyek <produk>—pertahankan konsistensi
    dgn screen lain dalam project OD ini.”
+
+   **Aturan anti-slop wajib di prompt, verbatim — bukan “ikuti quality
+   bar” yang abstrak.** Di backend ini agen OD yang menulis HTML, jadi
+   10 aturan antislop hanya sampai ke output kalau dikatakan kepadanya.
+   Sebutkan minimal: tidak ada `alert()`/`prompt()`/`confirm()`, tidak
+   ada emoji sebagai ikon, tidak memakai palet indigo/violet default
+   kecuali token `ui-context.md` menetapkannya, tidak ada teks
+   placeholder (Lorem ipsum, John Doe), microcopy memakai kata kerja
+   produk bukan “Click here”. Setelah run selesai, grep artifact-nya:
+   pelanggaran yang lolos ditegakkan lewat `start_run` baru yang
+   menunjuk tepat pelanggarannya (“hilangkan `alert()` di tombol
+   submit, ganti toast”), bukan lewat edit manual — lihat langkah 4
+   (post-run anti-slop gate) di Step 2.
 2. `start_run` langsung mengembalikan `runId` — **jangan memblokir turn kamu sambil menunggu di dalamnya**. Hint resmi: run butuh 5–30 menit.
 3. Poll `get_run(runId)` setiap 30–60 detik. `status: "running"` +
    mtime file statis = agen sedang berpikir, **bukan hang** — jangan
@@ -617,8 +645,8 @@ Backend-neutral. Isi minimum setiap run:
 - **Keputusan inkonsistensi**: perbedaan antar-frame yang disengaja +
   alasan (misalnya "chip status kolom di desktop, baris di mobile —
   mengikuti frame M02")
-- **Komponen siap pakai**: nama komponen magicui/shadcn yang dipakai +
-  perintah install
+- **Komponen siap pakai**: nama komponen magicui/shadcn yang dipakai + perintah install
+- **Referensi yang dipakai**: minimal satu pola dari referensi (nama repo + blok/pola + alasan) — lihat "Referensi adalah input, bukan pelarian"
 - **State yang tidak digambarkan**: loading/error/empty — dari mana
   (ui-context.md default)
 - **Lokasi artifak backend B**: `.open-design/NN-<slug>/exports/NN-<slug>.png`
@@ -853,19 +881,50 @@ ada PNG wajib — persetujuan lewat previewUrl.
    `start_run` terpisah dalam project OD yang sama; konsistensi dijaga
    oleh design system slug + prompt yang menyebut screen lain, lihat
    Step C4.)
-4. **Verifikasi inkonsistensi**: buka render PNG per frame, bandingkan
+4. **Post-run anti-slop gate** — periksa artifact setelah jadi, sebelum
+   langkah inkonsistensi dan export. Mekanis, bukan selera: grep
+   artifact HTML / render frame untuk tanda AI-slop konkret:
+
+   - Sintaks JS demo: `alert(`, `prompt(`, `confirm(` — harusnya toast
+     atau state yang sesungguhnya.
+   - Emoji sebagai ikon (🚀🎯✨🔥 di elemen markup, bukan konteks teks
+     yang sah).
+   - Palet default: `#6366f1`, `#8b5cf6`, `indigo-`, `violet-`,
+     `purple-` — khusus ini, kecuali token `ui-context.md` memang
+     menetapkan warna-warna itu.
+   - Teks placeholder: `Lorem ipsum`, `John Doe`, `contoh nama`, dan
+     sejenisnya.
+   - Microcopy generik: `Click here`, `Submit`, `Learn more` tanpa
+     kata kerja produk (`Simpan antrian`, `Kirim laporan`).
+
+   **Pelanggaran ditemukan → iterate ulang, bukan diabaikan.** Maksimal
+   2 ronde fix, lalu laporkan sisanya sebagai owed decision di handoff
+   (langkah 5 tetap berjalan untuk yang lolos — build tidak diblokir
+   oleh ini, tapi engineer tahu apa yang tidak bersih).
+
+   Backend A: grep dilakukan pada source frame `.pen` / render PNG;
+   kategori ini hanya cek struktur, warna ekstra (mis. gradien ungu
+   default) baru kelihatan di screenshot.
+   Backend B: aturan ini diterapkan ke HTML yang kamu tulis sendiri
+   sebelum `check_open_design_artifact` — `check` hanya cari yang
+   mekanis (overflow/kontras), bukan kualitas kualitatif.
+   Backend C: grep artifact setelah `get_run` sukses, lalu tegakkan
+   pelanggaran lewat `start_run` baru yang menunjuk pelanggaran tepat
+   (seperti Step C4 butir 1). **Jangan edit HTML-nya sendiri** —
+   kontrak "agen OD yang men-generate" tetap berlaku.
+5. **Verifikasi inkonsistensi**: buka render PNG per frame, bandingkan
    field/komponen yang sama antar breakpoint. Resolve sebelum export.
    (Backend B: ini dijalankan `check_open_design_artifact` per artifact,
    termasuk screenshot dan preflight. Backend C: baca `agentMessage` +
    `previewUrl` dari `get_run` untuk mengecek hasil tiap run; kalau
    perlu, iterate dengan prompt baru — jangan edit HTML-nya sendiri.)
-5. Export PNG per frame + `-ref.html` (html-tailwind/html-css sesuai stack).
+6. Export PNG per frame + `-ref.html` (html-tailwind/html-css sesuai stack).
    (Backend B: tiga artifak di bagian Backend B — PNG per screen, `-ref.html`
    per screen, index. Semua di `.open-design/NN-<slug>/exports/` kecuali
    index, lalu symlink ke `design/`. Backend C: artifact sudah ditulis
    agen OD ke `artifactPaths`; tugasmu hanya symlink ke `design/` —
    lihat Step C5.)
-6. Update frame `00 · Panduan` (backend A) atau index
+7. Update frame `00 · Panduan` (backend A) atau index
    `design/<project>-ref.html` (backend B/C) agar tetap menjadi indeks yang
    akurat.
 
